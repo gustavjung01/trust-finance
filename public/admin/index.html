@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - SHBFinance Lead Gen</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div id="loginOverlay" class="fixed inset-0 bg-gray-900 flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
+            <h2 class="text-2xl font-bold mb-6 text-center text-[#0F3B75]">Quản trị hệ thống</h2>
+            <input type="email" id="adminEmail" name="admin_email" autocomplete="username" class="w-full border rounded-lg p-3 mb-4 outline-none focus:ring-2 focus:ring-[#0F3B75]" placeholder="Email">
+            <input type="password" id="adminPass" name="admin_password" autocomplete="current-password" class="w-full border rounded-lg p-3 mb-4 outline-none focus:ring-2 focus:ring-[#0F3B75]" placeholder="Mật khẩu">
+            <p id="loginError" class="text-red-500 text-sm mb-4 hidden font-medium">Sai thông tin đăng nhập!</p>
+            <button onclick="checkAuth()" class="w-full bg-[#0F3B75] text-white py-3 rounded-lg font-bold hover:bg-blue-800 transition">ĐĂNG NHẬP</button>
+        </div>
+    </div>
+
+    <div id="adminContent" class="hidden">
+        <nav class="bg-[#0F3B75] text-white p-4">
+            <div class="container mx-auto flex justify-between items-center">
+                <div class="text-xl font-bold">SHBFinance Admin</div>
+                <button onclick="logout()" class="text-sm opacity-75">Đăng xuất</button>
+            </div>
+        </nav>
+
+        <div class="container mx-auto p-4 md:p-8">
+            <div id="storageStatus" class="mb-4 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700 shadow-sm">
+                Đang kiểm tra nơi lưu cấu hình...
+            </div>
+            <div class="flex border-b mb-6">
+                <button onclick="switchTab('leads')" id="tab-leads" class="px-6 py-2 font-bold border-b-2 border-[#0F3B75] text-[#0F3B75]">Leads</button>
+                <button onclick="switchTab('ai')" id="tab-ai" class="px-6 py-2 font-bold text-gray-500">AI Chatbot</button>
+                <button onclick="switchTab('telegram')" id="tab-telegram" class="px-6 py-2 font-bold text-gray-500">Telegram</button>
+            </div>
+
+            <div id="content-leads" class="tab-content">
+                <div class="bg-white rounded-xl shadow overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead class="bg-gray-50 border-b">
+                            <tr>
+                                <th class="p-4">Thời gian</th>
+                                <th class="p-4">Tên</th>
+                                <th class="p-4">SĐT</th>
+                                <th class="p-4">Sản phẩm</th>
+                                <th class="p-4">Hot?</th>
+                                <th class="p-4">Nguồn</th>
+                                <th class="p-4">Trạng thái</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leadsTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="content-ai" class="tab-content hidden">
+                <div class="max-w-2xl bg-white p-6 rounded-xl shadow">
+                    <h3 class="text-lg font-bold mb-4">Cấu hình Google Dialogflow CX</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="enable_chatbot">
+                            <label for="enable_chatbot">Bật Chatbot</label>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium">Google Cloud Credentials JSON</label>
+                            <input type="file" id="AI_CREDENTIALS_FILE" accept=".json,application/json" class="hidden" onchange="loadAICredentialsFile(event)">
+                            <textarea id="AI_CREDENTIALS_JSON" class="w-full border p-2 rounded h-32 text-xs font-mono" placeholder='{"type": "service_account", ...}'></textarea>
+                            <div class="flex justify-between items-center mt-2">
+                                <p id="credStatus" class="text-xs text-gray-500"></p>
+                                <div class="flex items-center gap-2">
+                                    <button onclick="triggerAICredentialsFile()" type="button" class="text-sm bg-gray-200 text-gray-800 px-3 py-1 rounded font-medium hover:bg-gray-300">Nạp file JSON</button>
+                                    <button onclick="fetchDialogflowAgents()" class="text-sm bg-gray-200 text-gray-800 px-3 py-1 rounded font-medium hover:bg-gray-300">Tải danh sách Agent</button>
+                                </div>
+                            </div>
+                            <p class="text-xs text-amber-600 mt-2">Lưu ý: nếu hệ thống chưa có DATABASE_URL thì cấu hình có thể chỉ lưu tạm theo phiên chạy. Khi đã nối Postgres, cấu hình sẽ dùng chung giữa các trình duyệt.</p>
+                        </div>
+
+                        <div id="agentSelectContainer" class="hidden border p-4 rounded-lg bg-blue-50 mt-4 mb-4">
+                            <label class="block text-sm font-bold text-[#0F3B75] mb-2">Chọn Agent từ Google Cloud:</label>
+                            <select id="agentSelect" class="w-full border p-2 rounded" onchange="applyAgentConfig()">
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium">Base URL</label>
+                            <input type="text" id="AI_BASE_URL" class="w-full border p-2 rounded" value="https://dialogflow.googleapis.com/v3">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium">Project ID</label>
+                            <input type="text" id="AI_PROJECT_ID" class="w-full border p-2 rounded bg-gray-50" readonly>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium">Location</label>
+                                <input type="text" id="AI_LOCATION" class="w-full border p-2 rounded bg-gray-50" readonly>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium">Language Code</label>
+                                <input type="text" id="AI_LANGUAGE_CODE" class="w-full border p-2 rounded bg-gray-50" readonly>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium">Agent ID (Full Path)</label>
+                            <input type="text" id="AI_AGENT_ID" class="w-full border p-2 rounded bg-gray-50 text-xs font-mono" readonly placeholder="projects/.../locations/.../agents/...">
+                        </div>
+                        
+                        <div class="flex gap-3 pt-2">
+                            <button onclick="saveSettings('ai')" class="bg-[#0F3B75] text-white px-6 py-2 rounded font-bold hover:bg-blue-800">Lưu cấu hình AI</button>
+                            <button onclick="testAI()" class="border px-6 py-2 rounded font-bold hover:bg-gray-50">Test Connection</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="content-telegram" class="tab-content hidden">
+                <div class="max-w-2xl bg-white p-6 rounded-xl shadow">
+                    <h3 class="text-lg font-bold mb-4">Cấu hình Telegram Notify</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium">Bot Token</label>
+                            <input type="password" id="TELEGRAM_BOT_TOKEN" name="telegram_bot_token_no_autofill" autocomplete="new-password" data-masked="false" class="w-full border p-2 rounded" placeholder="Dán Bot Token hoặc để trống nếu đã lưu">
+                            <p id="telegramTokenStatus" class="text-xs text-gray-500 mt-1">Token sẽ được ẩn sau khi lưu. Để trống nếu không muốn đổi token đã lưu.</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium">Chat ID (Channel/User/Group)</label>
+                            <input type="text" id="TELEGRAM_DEFAULT_CHAT_ID" name="telegram_chat_id_no_autofill" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="text" class="w-full border p-2 rounded" placeholder="-5131232480">
+                            <p class="text-xs text-gray-500 mt-1">Có thể nhập nhiều ID, cách nhau bằng dấu phẩy hoặc xuống dòng. Group thường có dấu âm, ví dụ: -5131232480. Không nhập email vào ô này.</p>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="notify_finance_chat_lead">
+                                <label>Báo lead mới từ form/chatbot</label>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="notify_finance_hot_lead">
+                                <label>Báo lead mạnh (Hot lead)</label>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium">Từ khóa nóng (phân cách bằng dấu phẩy)</label>
+                            <textarea id="HOT_KEYWORDS" class="w-full border p-2 rounded h-20">vay, mở thẻ, nợ xấu, CIC, cần tiền, lãi suất, hạn mức, hồ sơ, gọi lại, tư vấn, giải ngân</textarea>
+                        </div>
+                        <div class="flex gap-3">
+                            <button onclick="saveSettings('telegram')" class="bg-[#0F3B75] text-white px-6 py-2 rounded font-bold">Lưu Telegram</button>
+                            <button onclick="testTelegram()" class="border px-6 py-2 rounded font-bold">Test Gửi Tin Nhắn</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ADMIN_SETTINGS_CACHE_KEY = 'shbfinance_admin_settings_cache';
+        let adminKey = localStorage.getItem('admin_key');
+        if (adminKey) {
+            document.getElementById('loginOverlay').classList.add('hidden');
+            document.getElementById('adminContent').classList.remove('hidden');
+            loadData();
+        }
+
+        async function checkAuth() {
+            const email = document.getElementById('adminEmail').value.trim();
+            const pass = document.getElementById('adminPass').value.trim();
+            if (!email || !pass) return;
+            
+            // Xử lý chuẩn Unicode base64 cho mọi trình duyệt
+            const str = `${email}:${pass}`;
+            const key = btoa(unescape(encodeURIComponent(str)));
+            
+            try {
+                const res = await fetch('/api/admin/auth-check', {
+                    headers: { 'x-admin-key': key }
+                });
+                
+                if (res.ok) {
+                    adminKey = key;
+                    localStorage.setItem('admin_key', key);
+                    document.getElementById('loginOverlay').classList.add('hidden');
+                    document.getElementById('adminContent').classList.remove('hidden');
+                    document.getElementById('loginError').classList.add('hidden');
+                    loadData();
+                } else if (res.status === 401) {
+                    document.getElementById('loginError').classList.remove('hidden');
+                    document.getElementById('loginError').textContent = 'Sai email hoặc mật khẩu.';
+                } else if (res.status === 500) {
+                    let data = {};
+                    try { data = await res.json(); } catch(e) {}
+                    
+                    document.getElementById('loginError').classList.remove('hidden');
+                    if (data.error === 'admin_not_configured') {
+                        document.getElementById('loginError').textContent = 'Chưa cấu hình ADMIN_EMAIL và ADMIN_PASS trên server.';
+                    } else {
+                        document.getElementById('loginError').textContent = data.error
+                            ? `Lỗi hệ thống từ server: ${data.error}.`
+                            : `Lỗi hệ thống từ server. Status 500.`;
+                    }
+                } else {
+                    document.getElementById('loginError').classList.remove('hidden');
+                    document.getElementById('loginError').textContent = `Lỗi không xác định: HTTP ${res.status}`;
+                }
+            } catch (err) {
+                 document.getElementById('loginError').classList.remove('hidden');
+                 document.getElementById('loginError').textContent = 'Lỗi kết nối mạng hoặc CORS. Vui lòng F5 lại trang.';
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('admin_key');
+            location.reload();
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById('content-' + tab).classList.remove('hidden');
+            document.querySelectorAll('[id^="tab-"]').forEach(el => {
+                el.classList.remove('border-b-2', 'border-[#0F3B75]', 'text-[#0F3B75]');
+                el.classList.add('text-gray-500');
+            });
+            document.getElementById('tab-' + tab).classList.add('border-b-2', 'border-[#0F3B75]', 'text-[#0F3B75]');
+            document.getElementById('tab-' + tab).classList.remove('text-gray-500');
+        }
+
+        function renderStorageStatus(status = {}) {
+            const el = document.getElementById('storageStatus');
+            if (!el) return;
+
+            const isPostgres = status.storageMode === 'postgres';
+            const isMissingDb = status.storageMode === 'missing_database_url';
+            const isLocal = status.storageMode === 'local_file';
+
+            if (isPostgres) {
+                el.className = 'mb-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 shadow-sm';
+                el.innerHTML = '<strong>Storage:</strong> PostgreSQL/DATABASE_URL đã bật. Cấu hình AI/Telegram và lead sẽ dùng chung giữa browser, máy khác và sau redeploy.';
+                return;
+            }
+
+            if (isMissingDb) {
+                el.className = 'mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-sm';
+                el.innerHTML = '<strong>Storage lỗi:</strong> Vercel chưa có DATABASE_URL. Không lưu cấu hình thật trên server. Thêm DATABASE_URL vào Vercel Environment Variables rồi Redeploy.';
+                return;
+            }
+
+            if (isLocal) {
+                el.className = 'mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-sm';
+                el.innerHTML = '<strong>Storage local:</strong> Đang lưu bằng file local để test máy cá nhân. Khi deploy Vercel phải có DATABASE_URL, nếu không cấu hình sẽ mất.';
+                return;
+            }
+
+            el.className = 'mb-4 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700 shadow-sm';
+            el.innerHTML = '<strong>Storage:</strong> Chưa xác định được trạng thái lưu cấu hình.';
+        }
+
+        async function fetchConfigStatus() {
+            try {
+                const res = await fetch('/api/admin/config-status', {
+                    headers: adminKey ? { 'x-admin-key': adminKey } : {}
+                });
+                const data = await res.json().catch(() => ({}));
+                renderStorageStatus(data);
+                return data;
+            } catch (err) {
+                renderStorageStatus({ storageMode: 'unknown' });
+                return {};
+            }
+        }
+
+        async function loadData() {
+            await fetchConfigStatus();
+            await Promise.allSettled([fetchLeads(), fetchSettings()]);
+        }
+
+        async function fetchLeads() {
+            const tbody = document.getElementById('leadsTable');
+            try {
+                const res = await fetch('/api/admin/finance-leads', {
+                    headers: { 'x-admin-key': adminKey }
+                });
+
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-red-600 text-center font-bold">
+                        Không tải được lead. Lỗi: ${data.error || res.status} ${data.message || ''}
+                    </td></tr>`;
+                    return;
+                }
+
+                const leads = await res.json();
+                if (!Array.isArray(leads) || leads.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500">Chưa có lead.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = leads.map(l => `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="p-4 text-xs">${l.created_at ? new Date(l.created_at).toLocaleString() : ''}</td>
+                        <td class="p-4 font-medium">${l.full_name || ''}</td>
+                        <td class="p-4">${l.normalized_phone || l.phone || ''}</td>
+                        <td class="p-4 text-sm">${l.product_type || ''}</td>
+                        <td class="p-4">${l.is_hot ? '<span class="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-bold">HOT</span>' : ''}</td>
+                        <td class="p-4 text-xs text-gray-500">${l.source || ''}</td>
+                        <td class="p-4 text-xs">
+                            <select onchange="updateStatus(${l.id}, this.value)" class="border rounded p-1 text-xs">
+                                <option value="new" ${l.status === 'new' ? 'selected' : ''}>New</option>
+                                <option value="contacted" ${l.status === 'contacted' ? 'selected' : ''}>Contacted</option>
+                                <option value="qualified" ${l.status === 'qualified' ? 'selected' : ''}>Qualified</option>
+                                <option value="rejected" ${l.status === 'rejected' ? 'selected' : ''}>Rejected</option>
+                                <option value="converted" ${l.status === 'converted' ? 'selected' : ''}>Converted</option>
+                            </select>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-red-600 text-center font-bold">
+                    Không kết nối được API lead: ${err.message}
+                </td></tr>`;
+            }
+        }
+
+        let loadedAgents = [];
+
+        async function fetchDialogflowAgents() {
+            let jsonVal = document.getElementById('AI_CREDENTIALS_JSON').value.trim();
+            if (!jsonVal) {
+                alert('Vui lòng dán nội dung file Credentials JSON của Google Cloud Service Account vào khung trước.');
+                return;
+            }
+            if (jsonVal === '********') {
+                alert('JSON đang bị ẩn để bảo mật. Hãy dán lại đoạn JSON mới nếu muốn tải lại danh sách Agent!');
+                return;
+            }
+
+            try {
+                // Thử parse để chắc chắn là JSON hợp lệ trước khi gửi
+                JSON.parse(jsonVal);
+            } catch (e) {
+                alert('Định dạng JSON không hợp lệ. Vui lòng kiểm tra lại nội dung copy.');
+                return;
+            }
+
+            const btn = document.querySelector('button[onclick="fetchDialogflowAgents()"]');
+            const originalText = btn.innerText;
+            btn.innerText = 'Đang tải...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/admin/ai/list-agents', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'x-admin-key': adminKey
+                    },
+                    body: JSON.stringify({ credentials_json: jsonVal })
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    if (data.agents && data.agents.length > 0) {
+                        loadedAgents = data.agents;
+                        const select = document.getElementById('agentSelect');
+                        select.innerHTML = '<option value="">-- Chọn Agent --</option>' + 
+                            data.agents.map(a => `<option value="${a.name}">${a.displayName} (${a.location})</option>`).join('');
+                        
+                        document.getElementById('agentSelectContainer').classList.remove('hidden');
+                        alert(`Tìm thấy ${data.agents.length} agent trong project ${data.projectId}`);
+                        
+                        // Set project ID
+                        document.getElementById('AI_PROJECT_ID').value = data.projectId;
+                    } else {
+                        alert(data.message || 'Không tìm thấy Dialogflow CX Agent nào trong Project này.');
+                    }
+                } else {
+                    alert('Lỗi: ' + data.error);
+                }
+            } catch (err) {
+                alert('Lỗi kết nối khi tải danh sách agent: ' + err.message);
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        function applyAgentConfig() {
+            const selectVal = document.getElementById('agentSelect').value;
+            if (!selectVal) return;
+            
+            const agent = loadedAgents.find(a => a.name === selectVal);
+            if (agent) {
+                document.getElementById('AI_LOCATION').value = agent.location;
+                document.getElementById('AI_LANGUAGE_CODE').value = agent.defaultLanguageCode || 'vi';
+                document.getElementById('AI_AGENT_ID').value = agent.name; // Full resource name path
+                
+                // Update Base URL according to location
+                if (agent.location !== 'global') {
+                     document.getElementById('AI_BASE_URL').value = `https://${agent.location}-dialogflow.googleapis.com/v3`;
+                } else {
+                     document.getElementById('AI_BASE_URL').value = 'https://dialogflow.googleapis.com/v3';
+                }
+            }
+        }
+        
+        function isMaskedSecret(value) {
+            const text = String(value || '').trim();
+            return text === '********' || /^•+$/.test(text);
+        }
+
+        function isLikelyEmail(value) {
+            const text = String(value || '').trim();
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text);
+        }
+
+        function markTelegramTokenSaved(loadedFromServer = true) {
+            const tokenEl = document.getElementById('TELEGRAM_BOT_TOKEN');
+            const statusEl = document.getElementById('telegramTokenStatus');
+            if (!tokenEl) return;
+            tokenEl.value = '';
+            tokenEl.dataset.masked = 'true';
+            tokenEl.placeholder = 'Đã lưu Bot Token trên server - để trống nếu không đổi';
+            if (statusEl) {
+                statusEl.textContent = loadedFromServer
+                    ? 'Đã lưu Bot Token trên server. Token được ẩn, không cần nhập lại nếu không đổi.'
+                    : 'Đang dùng trạng thái token đã lưu từ cache/trình duyệt.';
+                statusEl.className = 'text-xs text-green-600 mt-1 font-medium';
+            }
+        }
+
+        function markTelegramTokenMissing() {
+            const tokenEl = document.getElementById('TELEGRAM_BOT_TOKEN');
+            const statusEl = document.getElementById('telegramTokenStatus');
+            if (!tokenEl) return;
+            tokenEl.dataset.masked = 'false';
+            tokenEl.placeholder = 'Dán Bot Token Telegram';
+            if (statusEl) {
+                statusEl.textContent = 'Chưa có Bot Token đã lưu. Cần nhập token rồi bấm Lưu Telegram.';
+                statusEl.className = 'text-xs text-amber-600 mt-1 font-medium';
+            }
+        }
+
+        async function fetchSettings() {
+            let settings = {};
+            let loadedFromServer = false;
+
+            try {
+                const res = await fetch('/api/admin/settings', {
+                    headers: { 'x-admin-key': adminKey }
+                });
+
+                if (res.ok) {
+                    settings = await res.json();
+                    loadedFromServer = true;
+                    if (settings && Object.keys(settings).length > 0) {
+                        localStorage.setItem(ADMIN_SETTINGS_CACHE_KEY, JSON.stringify(settings));
+                    }
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    const cached = localStorage.getItem(ADMIN_SETTINGS_CACHE_KEY);
+                    if (cached) {
+                        settings = JSON.parse(cached) || {};
+                        document.getElementById('credStatus').innerText =
+                            `Không tải được cấu hình server (${data.error || res.status}). Đang dùng cache trình duyệt.`;
+                    } else {
+                        document.getElementById('credStatus').innerText =
+                            `Không tải được cấu hình server: ${data.error || res.status} ${data.message || ''}`;
+                    }
+                }
+            } catch (err) {
+                const cached = localStorage.getItem(ADMIN_SETTINGS_CACHE_KEY);
+                if (cached) {
+                    settings = JSON.parse(cached) || {};
+                    document.getElementById('credStatus').innerText = 'Không kết nối được server. Đang dùng cache trình duyệt.';
+                } else {
+                    document.getElementById('credStatus').innerText = 'Không kết nối được server và không có cache cấu hình.';
+                }
+            }
+
+            if (!settings || Object.keys(settings).length === 0) {
+                return;
+            }
+
+            const aiCredentialsEl = document.getElementById('AI_CREDENTIALS_JSON');
+            if (aiCredentialsEl) {
+                aiCredentialsEl.dataset.masked = 'false';
+            }
+
+            const telegramTokenEl = document.getElementById('TELEGRAM_BOT_TOKEN');
+            if (telegramTokenEl) {
+                telegramTokenEl.dataset.masked = 'false';
+            }
+            markTelegramTokenMissing();
+
+            for (const key in settings) {
+                if (key.startsWith('__')) continue;
+                const el = document.getElementById(key);
+                if (!el) continue;
+
+                if (key === 'AI_CREDENTIALS_JSON' && settings[key] === '********') {
+                    el.value = '';
+                    el.dataset.masked = 'true';
+                    continue;
+                }
+
+                if (key === 'TELEGRAM_BOT_TOKEN') {
+                    if (settings[key]) {
+                        markTelegramTokenSaved(loadedFromServer);
+                    } else {
+                        markTelegramTokenMissing();
+                    }
+                    continue;
+                }
+
+                if (key === 'TELEGRAM_DEFAULT_CHAT_ID' && isLikelyEmail(settings[key])) {
+                    el.value = '';
+                    const tokenStatus = document.getElementById('telegramTokenStatus');
+                    if (tokenStatus) {
+                        tokenStatus.textContent = 'Chat ID đang bị lưu thành email do autofill. Hãy nhập lại group ID Telegram, ví dụ -5131232480, rồi bấm Lưu Telegram.';
+                        tokenStatus.className = 'text-xs text-red-600 mt-1 font-medium';
+                    }
+                    continue;
+                }
+
+                if (el.type === 'checkbox') {
+                    el.checked = settings[key] === true || settings[key] === 'true' || settings[key] === '1';
+                } else {
+                    el.value = settings[key] || '';
+                }
+            }
+
+            if (settings.AI_CREDENTIALS_JSON === '********') {
+                document.getElementById('credStatus').innerText = loadedFromServer
+                    ? 'Đã cấu hình JSON trên server (ẩn vì bảo mật). Không dán lại nếu không cần đổi.'
+                    : 'Đang dùng cấu hình JSON từ cache/trạng thái cũ.';
+            }
+        }
+
+        async function saveSettings(type) {
+            let keys = [];
+            if (type === 'ai') keys = ['enable_chatbot', 'AI_BASE_URL', 'AI_PROJECT_ID', 'AI_LOCATION', 'AI_LANGUAGE_CODE', 'AI_AGENT_ID', 'AI_CREDENTIALS_JSON'];
+            if (type === 'telegram') keys = ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_DEFAULT_CHAT_ID', 'notify_finance_chat_lead', 'notify_finance_hot_lead', 'HOT_KEYWORDS'];
+
+            const settings = {};
+            for (const k of keys) {
+                const el = document.getElementById(k);
+                if (!el) continue;
+
+                const value = el.type === 'checkbox' ? el.checked : String(el.value || '');
+
+                if (k === 'AI_CREDENTIALS_JSON' && !value.trim() && el.dataset.masked === 'true') {
+                    continue;
+                }
+
+                if (
+                    k === 'TELEGRAM_BOT_TOKEN' &&
+                    (!value.trim() || isMaskedSecret(value)) &&
+                    el.dataset.masked === 'true'
+                ) {
+                    continue;
+                }
+
+                if (el.type === 'checkbox') settings[k] = el.checked;
+                else settings[k] = value;
+            }
+
+            if (type === 'telegram') {
+                const tokenEl = document.getElementById('TELEGRAM_BOT_TOKEN');
+                const chatIdEl = document.getElementById('TELEGRAM_DEFAULT_CHAT_ID');
+                const hasExistingToken = tokenEl?.dataset.masked === 'true';
+                const hasNewToken = String(tokenEl?.value || '').trim() && !isMaskedSecret(tokenEl?.value);
+
+                if (!hasExistingToken && !hasNewToken) {
+                    alert('Thiếu Bot Token. Hãy nhập Bot Token Telegram rồi bấm Lưu Telegram.');
+                    return;
+                }
+
+                const chatId = String(chatIdEl?.value || '').trim();
+                if (!chatId) {
+                    alert('Thiếu Chat ID. Group Finance của bạn đang dùng dạng số âm, ví dụ: -5131232480.');
+                    return;
+                }
+
+                if (isLikelyEmail(chatId)) {
+                    alert('Chat ID không phải email. Hãy nhập group ID Telegram, ví dụ: -5131232480.');
+                    chatIdEl.focus();
+                    return;
+                }
+            }
+
+            let res;
+            let data = {};
+            try {
+                res = await fetch('/api/admin/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-admin-key': adminKey
+                    },
+                    body: JSON.stringify(settings)
+                });
+                data = await res.json().catch(() => ({}));
+            } catch (err) {
+                alert('Không kết nối được server nên chưa lưu cấu hình thật. Không ghi cache giả.');
+                return;
+            }
+
+            if (!res.ok) {
+                alert(`Lỗi khi lưu cấu hình server: ${data.error || res.status} ${data.message || ''}`);
+                await fetchConfigStatus();
+                return;
+            }
+
+            let cached = {};
+            try {
+                cached = JSON.parse(localStorage.getItem(ADMIN_SETTINGS_CACHE_KEY) || '{}') || {};
+            } catch (e) {
+                cached = {};
+            }
+
+            const safeCacheSettings = { ...settings };
+            if (type === 'telegram') {
+                safeCacheSettings.TELEGRAM_BOT_TOKEN = '********';
+            }
+
+            localStorage.setItem(ADMIN_SETTINGS_CACHE_KEY, JSON.stringify({
+                ...cached,
+                ...safeCacheSettings,
+                ...(document.getElementById('AI_CREDENTIALS_JSON')?.dataset.masked === 'true' ? { AI_CREDENTIALS_JSON: '********' } : {})
+            }));
+
+            alert(data.storageMode === 'postgres'
+                ? 'Đã lưu cấu hình vào PostgreSQL!'
+                : 'Đã lưu cấu hình local. Lưu ý: trên Vercel phải có DATABASE_URL để cấu hình bền.');
+            await fetchConfigStatus();
+            await fetchSettings();
+        }
+
+        function triggerAICredentialsFile() {
+            document.getElementById('AI_CREDENTIALS_FILE').click();
+        }
+
+        async function loadAICredentialsFile(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+
+            try {
+                const text = await file.text();
+                JSON.parse(text);
+                document.getElementById('AI_CREDENTIALS_JSON').value = text;
+                document.getElementById('credStatus').innerText = `Đã nạp file: ${file.name}`;
+            } catch (err) {
+                alert('File JSON không hợp lệ hoặc bị lỗi định dạng.');
+            } finally {
+                event.target.value = '';
+            }
+        }
+
+        async function updateStatus(id, status) {
+            const res = await fetch(`/api/admin/finance-leads/${id}/status`, {
+                method: 'PATCH',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-admin-key': adminKey 
+                },
+                body: JSON.stringify({ status })
+            });
+            if (!res.ok) {
+                alert('Lỗi cập nhật trạng thái');
+                fetchLeads();
+            }
+        }
+
+        async function testTelegram() {
+            const tokenEl = document.getElementById('TELEGRAM_BOT_TOKEN');
+            const chatIdEl = document.getElementById('TELEGRAM_DEFAULT_CHAT_ID');
+
+            const rawToken = String(tokenEl?.value || '').trim();
+            const token = (tokenEl?.dataset.masked === 'true' && (!rawToken || isMaskedSecret(rawToken))) ? '' : rawToken;
+            const chatId = String(chatIdEl?.value || '').trim();
+
+            if (!chatId) {
+                alert('Thiếu Chat ID. Nhập group ID Telegram, ví dụ: -5131232480.');
+                return;
+            }
+
+            if (isLikelyEmail(chatId)) {
+                alert('Chat ID không phải email. Hãy nhập group ID Telegram, ví dụ: -5131232480.');
+                chatIdEl.focus();
+                return;
+            }
+
+            const res = await fetch('/api/admin/finance-leads/test-telegram', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-admin-key': adminKey
+                },
+                body: JSON.stringify({ token, chatId })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (data.success) {
+                alert('Đã gửi tin nhắn test thành công!');
+            } else {
+                const details = Array.isArray(data.results)
+                    ? data.results.map(item => `${item.chatId}: ${item.reason || item.error || 'failed'}`).join('; ')
+                    : '';
+                alert('Lỗi Telegram: ' + (data.error || data.message || details || 'Kiểm tra lại Token/Chat ID'));
+            }
+        }
+
+        async function testAI() {
+            const res = await fetch('/api/admin/finance-leads/test-ai', {
+                method: 'POST',
+                headers: { 'x-admin-key': adminKey }
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                const reply = data.reply || data.message || 'Test AI thành công';
+                alert(`${data.source || 'ai'}: ${reply}`);
+            } else {
+                alert(data.error || `Test AI thất bại: HTTP ${res.status}`);
+            }
+        }
+    </script>
+</body>
+</html>

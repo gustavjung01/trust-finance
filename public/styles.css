@@ -1,0 +1,332 @@
+:root {
+  --shbf-primary: #0F3B75;
+  --shbf-accent: #F58220;
+  --shbf-bg: #F7FAFF;
+  --shbf-text: #1F2937;
+  --shbf-muted: #64748B;
+  --shbf-card: #FFFFFF;
+  --shbf-border: #D8E3F3;
+}
+
+.shbf-page {
+  min-height: 100vh;
+  padding-bottom: 86px;
+  background: var(--shbf-bg);
+  color: var(--shbf-text);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.shbf-hero {
+  padding: 42px 18px 28px;
+  max-width: 980px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.shbf-badge {
+  display: inline-flex;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: #E8F1FF;
+  color: var(--shbf-primary);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.shbf-hero h1 {
+  margin: 16px auto 10px;
+  max-width: 760px;
+  font-size: clamp(30px, 6vw, 56px);
+  line-height: 1.05;
+  color: var(--shbf-primary);
+}
+
+.shbf-hero p {
+  max-width: 720px;
+  margin: 0 auto;
+  color: var(--shbf-muted);
+  font-size: 17px;
+}
+
+.shbf-hero-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+
+.shbf-hero-actions button,
+.shbf-product-card button,
+.shbf-submit,
+.shbf-bottom-bar button {
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 18px;
+  background: var(--shbf-accent);
+  color: white;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.shbf-hero-actions .secondary {
+  background: var(--shbf-primary);
+}
+
+.shbf-legal-note {
+  margin-top: 14px !important;
+  font-size: 13px !important;
+}
+
+.shbf-trust-grid,
+.shbf-products,
+.shbf-form-section,
+.shbf-faq {
+  max-width: 980px;
+  margin: 18px auto;
+  padding: 0 16px;
+}
+
+.shbf-trust-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.shbf-trust-grid div,
+.shbf-product-card,
+.shbf-lead-form,
+.shbf-form-success,
+.shbf-faq details {
+  background: var(--shbf-card);
+  border: 1px solid var(--shbf-border);
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(15, 59, 117, 0.06);
+}
+
+.shbf-trust-grid div {
+  padding: 14px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--shbf-primary);
+}
+
+.shbf-products {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.shbf-product-card {
+  padding: 20px;
+}
+
+.shbf-product-card h3 {
+  color: var(--shbf-primary);
+  margin-top: 0;
+}
+
+.shbf-product-card p {
+  color: var(--shbf-muted);
+  min-height: 76px;
+}
+
+.shbf-lead-form,
+.shbf-form-success {
+  padding: 22px;
+}
+
+.shbf-lead-form h2,
+.shbf-form-success h2,
+.shbf-faq h2 {
+  color: var(--shbf-primary);
+  margin-top: 0;
+}
+
+.shbf-lead-form label {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  font-weight: 700;
+}
+
+.shbf-lead-form input,
+.shbf-lead-form select,
+.shbf-lead-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--shbf-border);
+  border-radius: 12px;
+  padding: 12px;
+  font: inherit;
+}
+
+.shbf-lead-form textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.shbf-consent {
+  display: flex !important;
+  grid-template-columns: auto 1fr !important;
+  align-items: flex-start;
+  gap: 10px !important;
+  color: var(--shbf-muted);
+  font-weight: 600 !important;
+}
+
+.shbf-consent input {
+  width: auto;
+  margin-top: 3px;
+}
+
+.shbf-error {
+  color: #B42318;
+  font-weight: 700;
+}
+
+.shbf-submit {
+  width: 100%;
+  border-radius: 14px;
+  margin-top: 8px;
+  font-size: 16px;
+}
+
+.shbf-faq details {
+  padding: 16px;
+  margin: 10px 0;
+}
+
+.shbf-faq summary {
+  cursor: pointer;
+  font-weight: 800;
+  color: var(--shbf-primary);
+}
+
+.shbf-bottom-bar {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  z-index: 50;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 8px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 40px rgba(15, 59, 117, 0.18);
+  border: 1px solid var(--shbf-border);
+  backdrop-filter: blur(10px);
+}
+
+.shbf-bottom-bar button:nth-child(2) {
+  background: var(--shbf-primary);
+}
+
+@media (max-width: 760px) {
+  .shbf-trust-grid,
+  .shbf-products {
+    grid-template-columns: 1fr;
+  }
+  .shbf-hero {
+    text-align: left;
+  }
+  .shbf-hero-actions {
+    justify-content: flex-start;
+  }
+  .shbf-hero h1,
+  .shbf-hero p {
+    margin-left: 0;
+  }
+}
+
+/* SHBFinance brand logo two-tone */
+.shbf-brand-logo,
+.brand-logo {
+  font-weight: 900;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.shbf-brand-blue,
+.brand-blue {
+  color: var(--shbf-primary, #0F3B75);
+}
+
+.shbf-brand-orange,
+.brand-orange {
+  color: var(--shbf-accent, #F58220);
+}
+
+/* Manual horizontal product image cards */
+.product-scroll,
+.shbf-product-scroll {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding: 0.25rem 0.25rem 1rem;
+  scrollbar-width: none;
+}
+
+.product-scroll::-webkit-scrollbar,
+.shbf-product-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.product-mini-card,
+.shbf-product-image-card {
+  min-width: 15rem;
+  width: 15rem;
+  scroll-snap-align: start;
+  background: var(--shbf-card, #fff);
+  border: 1px solid rgba(15, 59, 117, 0.12);
+  border-radius: 1.25rem;
+  box-shadow: 0 10px 26px rgba(15, 59, 117, 0.10);
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  flex: 0 0 auto;
+}
+
+.product-mini-card img,
+.shbf-product-image-card img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  display: block;
+  border-radius: 1rem;
+  background: #fff;
+}
+
+.product-mini-card button,
+.shbf-product-image-card button {
+  width: 100%;
+  min-height: 2.75rem;
+  border: 0;
+  border-radius: 0.9rem;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #fff;
+  background: var(--shbf-accent, #F58220);
+  box-shadow: 0 8px 18px rgba(15, 59, 117, 0.12);
+  cursor: pointer;
+}
+
+.product-mini-card:nth-child(odd) button,
+.shbf-product-image-card:nth-child(odd) button {
+  background: var(--shbf-primary, #0F3B75);
+}
+
+@media (min-width: 768px) {
+  .product-mini-card,
+  .shbf-product-image-card {
+    min-width: 17rem;
+    width: 17rem;
+  }
+}
+

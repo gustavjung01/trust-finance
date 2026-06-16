@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHBFinance | Hỗ trợ tư vấn vay tiêu dùng & thẻ tín dụng</title>
+    <meta name="description" content="Để lại thông tin để được hỗ trợ tư vấn vay tiêu dùng, vay online, mở thẻ tín dụng và kiểm tra hồ sơ sơ bộ. Nhân viên sẽ liên hệ trong ngày.">
+    <link rel="canonical" href="https://trust-finance-seven.vercel.app/">
+
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SHBFinance">
+    <meta property="og:url" content="https://trust-finance-seven.vercel.app/">
+    <meta property="og:title" content="SHBFinance | Tư vấn vay tiêu dùng & thẻ tín dụng">
+    <meta property="og:description" content="Quét QR hoặc để lại số điện thoại để được hỗ trợ tư vấn vay tiêu dùng, vay online, mở thẻ tín dụng và kiểm tra hồ sơ sơ bộ.">
+    <meta property="og:image" content="https://trust-finance-seven.vercel.app/assets/products/vay-tien-mat.png">
+    <meta property="og:image:secure_url" content="https://trust-finance-seven.vercel.app/assets/products/vay-tien-mat.png">
+    <meta property="og:image:alt" content="SHBFinance hỗ trợ tư vấn vay tiêu dùng và thẻ tín dụng">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="SHBFinance | Tư vấn vay tiêu dùng & thẻ tín dụng">
+    <meta name="twitter:description" content="Để lại số điện thoại để được hỗ trợ tư vấn vay tiêu dùng, vay online, mở thẻ tín dụng và kiểm tra hồ sơ sơ bộ.">
+    <meta name="twitter:image" content="https://trust-finance-seven.vercel.app/assets/products/vay-tien-mat.png">
+<script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --primary: #0F3B75;
+            --accent: #F58220;
+            --bg: #F7FAFF;
+            --text: #1F2937;
+            --chat-kb: 0px;
+        }
+        body { background-color: var(--bg); color: var(--text); }
+        .btn-primary { background-color: var(--primary); color: white; }
+        .btn-accent { background-color: var(--accent); color: white; }
+        .typing-dots span {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            margin: 0 2px;
+            border-radius: 9999px;
+            background: #94a3b8;
+            animation: typingPulse 1s infinite ease-in-out;
+        }
+        .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+        @keyframes typingPulse {
+            0%, 80%, 100% { transform: translateY(0); opacity: .35; }
+            40% { transform: translateY(-4px); opacity: 1; }
+        }
+
+        .product-scroll {
+            display: flex;
+            gap: 1rem;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch;
+            padding: 0.25rem 0.25rem 1rem;
+        }
+        .product-scroll::-webkit-scrollbar { display: none; }
+        .product-scroll { scrollbar-width: none; }
+        .product-mini-card {
+            min-width: 15rem;
+            width: 15rem;
+            scroll-snap-align: start;
+            background: white;
+            border: 1px solid rgba(15, 59, 117, 0.12);
+            border-radius: 1.25rem;
+            box-shadow: 0 10px 26px rgba(15, 59, 117, 0.10);
+            padding: 0.6rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+        }
+        .product-mini-card img {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            object-fit: cover;
+            display: block;
+            border-radius: 1rem;
+            background: #fff;
+        }
+        .product-mini-card button {
+            width: 100%;
+            min-height: 2.75rem;
+            border-radius: 0.9rem;
+            font-size: 0.82rem;
+            font-weight: 800;
+            color: #fff;
+            box-shadow: 0 8px 18px rgba(15, 59, 117, 0.12);
+        }
+        @media (min-width: 768px) {
+            .product-mini-card {
+                min-width: 17rem;
+                width: 17rem;
+            }
+        }
+        @media (max-width: 640px) {
+            body {
+                padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+            }
+            body.chat-open-mobile {
+                position: fixed;
+                left: 0;
+                right: 0;
+                width: 100%;
+                overflow: hidden;
+                touch-action: none;
+            }
+            #mobileCta {
+                z-index: 70;
+                transition: opacity 160ms ease, transform 160ms ease;
+            }
+            body.chat-open-mobile #mobileCta {
+                opacity: 1;
+                transform: none;
+                pointer-events: auto;
+            }
+            #chatBackdrop {
+                display: none;
+                position: fixed;
+                left: 0;
+                right: 0;
+                top: 0;
+                bottom: calc(4.75rem + env(safe-area-inset-bottom));
+                z-index: 55;
+                pointer-events: auto;
+            }
+            body.chat-open-mobile #chatBackdrop {
+                display: block;
+            }
+            #chatWidget {
+                position: fixed !important;
+                right: 0.75rem !important;
+                bottom: calc(4.75rem + env(safe-area-inset-bottom)) !important;
+                left: auto !important;
+                top: auto !important;
+                width: 3.5rem;
+                height: 3.5rem;
+                z-index: 60;
+                pointer-events: auto;
+            }
+            #chatWidget > button {
+                position: static !important;
+                width: 3.5rem;
+                height: 3.5rem;
+                z-index: 60;
+                pointer-events: auto;
+            }
+            #chatWidget.is-open {
+                position: fixed !important;
+                left: 0 !important;
+                right: 0 !important;
+                top: 0 !important;
+                bottom: 0 !important;
+                width: auto;
+                height: auto;
+                z-index: 60;
+                pointer-events: none;
+            }
+            #chatWidget.is-open #chatBackdrop,
+            #chatWidget.is-open #chatBox {
+                pointer-events: auto;
+            }
+            #chatBox {
+                position: fixed !important;
+                left: 0.5rem !important;
+                right: 0.5rem !important;
+                top: calc(0.5rem + env(safe-area-inset-top)) !important;
+                bottom: calc(5rem + env(safe-area-inset-bottom) + var(--chat-kb, 0px)) !important;
+                width: auto !important;
+                height: auto !important;
+                max-width: none !important;
+                border-radius: 1.5rem !important;
+                max-height: none !important;
+                box-shadow: 0 24px 60px rgba(15, 59, 117, 0.18) !important;
+                overflow: hidden;
+                z-index: 60;
+            }
+            #chatWidget.is-open #chatBox {
+                display: flex !important;
+            }
+            #chatWidget.is-open > button {
+                display: none;
+            }
+            #chatMessages {
+                min-height: 0;
+                -webkit-overflow-scrolling: touch;
+                overscroll-behavior: contain;
+            }
+            #chatForm {
+                flex-shrink: 0;
+            }
+            #chatBox > div:first-child {
+                border-top-left-radius: 1.5rem;
+                border-top-right-radius: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="bg-white shadow-sm p-4 sticky top-0 z-50">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="text-2xl font-extrabold tracking-tight"><span class="text-[#0F3B75]">SHB</span><span class="text-[#F58220]">Finance</span></div>
+            <div class="text-sm text-gray-500 hidden md:block">Hỗ trợ tư vấn sản phẩm tài chính</div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-8">
+        <section class="text-center mb-12">
+            <h1 class="text-4xl font-bold mb-4 text-[#0F3B75]">Hỗ trợ tư vấn vay tiền mặt & mở thẻ SHBFinance</h1>
+            <p class="text-lg text-gray-600 mb-8">Kiểm tra nhu cầu, tư vấn sơ bộ điều kiện hồ sơ, không thu phí tư vấn. Kết quả phụ thuộc thẩm định.</p>
+            <div class="flex flex-wrap justify-center gap-4">
+                <button onclick="openPopup('cash_loan')" class="btn-primary px-8 py-3 rounded-full font-bold shadow-lg">Vay Tiền Mặt</button>
+                <button onclick="openPopup('app_loan')" class="btn-accent px-8 py-3 rounded-full font-bold shadow-lg">Vay Online App</button>
+                <button onclick="openPopup('credit_card')" class="btn-primary px-8 py-3 rounded-full font-bold shadow-lg">Mở Thẻ Tín Dụng</button>
+            </div>
+        </section>
+
+        <section class="grid md:grid-cols-3 gap-8 mb-12">
+            <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-[#0F3B75] flex flex-col">
+                <h3 class="text-xl font-bold mb-3 text-[#0F3B75]">Vay Tiền Mặt</h3>
+                <ul class="text-gray-600 mb-6 space-y-2 flex-1 list-disc list-inside">
+                    <li>Hạn mức tham khảo 10–100 triệu</li>
+                    <li>Kỳ hạn linh hoạt theo hồ sơ</li>
+                    <li>Phù hợp nhu cầu tiêu dùng/cá nhân</li>
+                </ul>
+                <button onclick="openPopup('cash_loan')" class="text-white bg-[#F58220] py-2 rounded-lg font-bold w-full hover:bg-orange-600 transition">Đăng ký tư vấn vay</button>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-[#F58220] flex flex-col">
+                <h3 class="text-xl font-bold mb-3 text-[#0F3B75]">Vay Online App</h3>
+                <ul class="text-gray-600 mb-6 space-y-2 flex-1 list-disc list-inside">
+                    <li>Đăng ký online trên ứng dụng</li>
+                    <li>Phù hợp nhu cầu nhanh/gọn</li>
+                    <li>Kết quả theo hệ thống xét duyệt</li>
+                </ul>
+                <button onclick="openPopup('app_loan')" class="text-white bg-[#0F3B75] py-2 rounded-lg font-bold w-full hover:bg-blue-800 transition">Tư vấn vay online</button>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-[#0F3B75] flex flex-col">
+                <h3 class="text-xl font-bold mb-3 text-[#0F3B75]">Thẻ Tín Dụng</h3>
+                <ul class="text-gray-600 mb-6 space-y-2 flex-1 list-disc list-inside">
+                    <li>Tư vấn mở thẻ Sung Túc</li>
+                    <li>Hạn mức theo hồ sơ/app</li>
+                    <li>Có thể dùng như nguồn tiền dự phòng</li>
+                </ul>
+                <button onclick="openPopup('credit_card')" class="text-white bg-[#F58220] py-2 rounded-lg font-bold w-full hover:bg-orange-600 transition">Kiểm tra mở thẻ</button>
+            </div>
+        </section>
+        <section class="mb-12">
+            <div class="product-scroll" aria-label="Danh mục sản phẩm SHBFinance dạng vuốt ngang">
+                <article class="product-mini-card">
+                    <img src="/assets/products/vay-tien-mat.png" alt="Vay tiền mặt SHBFinance">
+                    <button onclick="openPopup('cash_loan')" class="bg-[#0F3B75] hover:bg-blue-900 transition">Đăng ký tư vấn</button>
+                </article>
+
+                <article class="product-mini-card">
+                    <img src="/assets/products/vay-nhanh-tren-ung-dung.png" alt="Vay nhanh trên ứng dụng SHBFinance">
+                    <button onclick="openPopup('app_loan')" class="bg-[#F58220] hover:bg-orange-600 transition">Tư vấn app</button>
+                </article>
+
+                <article class="product-mini-card">
+                    <img src="/assets/products/uu-tien-duyet-vay.png" alt="Ưu tiên duyệt vay SHBFinance">
+                    <button onclick="openPopup('priority_loan')" class="bg-[#0F3B75] hover:bg-blue-900 transition">Kiểm tra hồ sơ</button>
+                </article>
+
+                <article class="product-mini-card">
+                    <img src="/assets/products/the-tin-dung-cash-card.png" alt="Thẻ tín dụng Cash Card SHBFinance">
+                    <button onclick="openPopup('credit_card')" class="bg-[#F58220] hover:bg-orange-600 transition">Mở thẻ</button>
+                </article>
+
+                <article class="product-mini-card">
+                    <img src="/assets/products/bao-hiem.png" alt="Bảo hiểm SHBFinance">
+                    <button onclick="openPopup('insurance')" class="bg-[#0F3B75] hover:bg-blue-900 transition">Tư vấn thêm</button>
+                </article>
+
+                <article class="product-mini-card">
+                    <img src="/assets/products/vay-qua-nen-tang-so.png" alt="Vay qua nền tảng số SHBFinance">
+                    <button onclick="openPopup('digital_platform_loan')" class="bg-[#F58220] hover:bg-orange-600 transition">Tìm hiểu</button>
+                </article>
+            </div>
+        </section>
+
+        <section class="bg-blue-50 p-8 rounded-2xl mb-12 border border-blue-100 shadow-sm">
+            <h2 class="text-2xl font-bold mb-6 text-center text-[#0F3B75]">🎁 Quyền Lợi & Cam Kết Từ SHBFinance</h2>
+            <ul class="space-y-4 text-gray-700">
+                <li class="flex items-start gap-3">
+                    <svg class="w-6 h-6 text-[#F58220] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <div><strong>Tối ưu tỷ lệ duyệt:</strong> Chuyên viên sẽ đồng hành hỗ trợ thiết kế giải pháp tài chính tối ưu nhất, bám sát theo điều kiện hồ sơ thực tế để nâng cao tối đa cơ hội phê duyệt chính thức của anh/chị trên hệ thống.</div>
+                </li>
+                <li class="flex items-start gap-3">
+                    <svg class="w-6 h-6 text-[#F58220] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <div><strong>Đặc quyền hỗ trợ 0 đồng:</strong> Cam kết dịch vụ tư vấn và hướng dẫn đăng ký hoàn toàn Miễn Phí 100%, tuyệt đối không phát sinh bất kỳ chi phí ẩn nào.</div>
+                </li>
+                <li class="flex items-start gap-3">
+                    <svg class="w-6 h-6 text-[#F58220] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                    <div><strong>Bảo mật & Chính thống:</strong> Quy trình tiếp nhận thông tin và thẩm định được thực hiện minh bạch, bảo mật tuyệt đối qua hệ thống app chuẩn của ngân hàng theo từng thời kỳ.</div>
+                </li>
+            </ul>
+        </section>
+    </main>
+
+    <!-- Popup Form -->
+    <div id="leadPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-start sm:items-center justify-center z-[100] p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 relative max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
+            <button onclick="closePopup()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+            <h2 class="text-2xl font-bold mb-6 text-[#0F3B75]">Đăng ký tư vấn</h2>
+            <form id="leadForm" class="space-y-4">
+                <input type="hidden" id="product_type" name="product_type">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Họ và tên</label>
+                    <input type="text" name="full_name" required class="w-full border rounded-lg p-2 focus:ring-2 focus:ring-[#0F3B75] outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Số điện thoại</label>
+                    <input type="tel" name="phone" required class="w-full border rounded-lg p-2 focus:ring-2 focus:ring-[#0F3B75] outline-none">
+                </div>
+                <div id="cicFields" class="hidden space-y-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Số CCCD/CMND</label>
+                        <input type="text" name="id_number" id="id_number" class="w-full border rounded-lg p-2 focus:ring-2 focus:ring-[#0F3B75] outline-none" placeholder="Nhập số CCCD/CMND">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Ngày sinh</label>
+                        <input type="date" name="date_of_birth" id="date_of_birth" class="w-full border rounded-lg p-2 focus:ring-2 focus:ring-[#0F3B75] outline-none">
+                    </div>
+                    <p class="text-xs text-blue-700 leading-relaxed">Để kiểm tra CIC sơ bộ, vui lòng nhập CCCD/CMND và ngày sinh chính xác. Các loại đăng ký khác không cần thêm thông tin này.</p>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+    <div>
+        <label class="block text-sm font-medium mb-1">Tỉnh/Thành phố</label>
+        <select id="provinceSelect" name="province" required class="w-full border rounded-lg p-2 focus:ring-2 focus:ring-[#0F3B75] outline-none text-sm" onchange="updateDistricts()">
+            <option value="">Chọn tỉnh/thành</option>
+        </select>
+    </div>
+    <div>
+        <label class="block text-sm font-medium mb-1">Quận/Huyện</label>
+        <select id="districtSelect" name="district" required class="w-full border rounded-lg p-2 focus:ring-2 focus:ring-[#0F3B75] outline-none text-sm" disabled>
+            <option value="">Chọn quận/huyện</option>
+        </select>
+    </div>
+</div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Số tiền/Hạn mức mong muốn</label>
+                    <input type="text" name="loan_amount" class="w-full border rounded-lg p-2 focus:ring-2 focus:ring-[#0F3B75] outline-none" placeholder="VD: 50 triệu">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Ghi chú thêm</label>
+                    <textarea name="message" class="w-full border rounded-lg p-2 focus:ring-2 focus:ring-[#0F3B75] outline-none" rows="2"></textarea>
+                </div>
+                <div class="flex items-start gap-2">
+                    <input type="checkbox" id="agree" required class="mt-1">
+                    <label for="agree" class="text-xs text-gray-500">Tôi đồng ý để lại thông tin để được tư vấn các sản phẩm tài chính từ SHBFinance.</label>
+                </div>
+                <button type="submit" class="w-full btn-primary py-3 rounded-lg font-bold">GỬI YÊU CẦU</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sticky Mobile CTA -->
+    <div id="mobileCta" class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t p-3 grid grid-cols-3 gap-2 z-[70]">
+        <button onclick="openPopup('consulting')" class="btn-primary py-2 rounded-lg font-bold text-xs">Đăng ký ngay</button>
+        <button onclick="openPopup('check_cic')" class="bg-gray-100 text-[#0F3B75] py-2 rounded-lg font-bold text-xs border border-gray-300">Check CIC</button>
+        <button onclick="openZalo()" class="bg-blue-500 text-white py-2 rounded-lg font-bold text-xs">Zalo</button>
+    </div>
+
+    <!-- Chatbot Widget -->
+    <div id="chatWidget" class="fixed bottom-20 right-4 z-50">
+        <div id="chatBackdrop" onclick="toggleChat()" class="hidden fixed inset-0 bg-slate-950/20 backdrop-blur-[1px] z-40"></div>
+        <button onclick="toggleChat()" class="p-0 rounded-full shadow-2xl overflow-hidden hover:scale-105 transition transform border-2 border-white w-14 h-14 bg-white">
+            <img src="/assets/avatar-chatbot.png" alt="Chatbot Avatar" class="w-full h-full object-cover">
+        </button>
+        <div id="chatBox" class="hidden absolute bottom-16 right-0 w-80 h-96 bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border z-50">
+            <div class="bg-[#0F3B75] p-3 text-white font-bold flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                    <img src="/assets/avatar-chatbot.png" alt="Chatbot Avatar" class="w-8 h-8 rounded-full border border-white">
+                    <span>Tư vấn SHBFinance</span>
+                </div>
+                <button onclick="toggleChat()">&times;</button>
+            </div>
+            <div id="chatMessages" class="flex-1 p-4 overflow-y-auto space-y-3 text-sm"></div>
+            <form id="chatForm" class="p-3 border-t flex gap-2">
+                <input type="text" id="chatInput" class="flex-1 border rounded-full px-3 py-1 text-sm outline-none" placeholder="Nhập tin nhắn...">
+                <button id="chatSendButton" type="submit" class="text-[#0F3B75]"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"></path></svg></button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const ZALO_URL = 'https://zalo.me/0969155751';
+
+let provincesData = [];
+async function loadProvinces() {
+    try {
+        const res = await fetch('/assets/provinces.json');
+        provincesData = await res.json();
+        const provSelect = document.getElementById('provinceSelect');
+        provincesData.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.name;
+            opt.textContent = p.name;
+            provSelect.appendChild(opt);
+        });
+    } catch(e) { console.error(e); }
+}
+
+function updateDistricts() {
+    const provName = document.getElementById('provinceSelect').value;
+    const distSelect = document.getElementById('districtSelect');
+    distSelect.innerHTML = '<option value="">Chọn quận/huyện</option>';
+    if (!provName) {
+        distSelect.disabled = true; return;
+    }
+    const province = provincesData.find(p => p.name === provName);
+    if (province && province.districts) {
+        province.districts.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.name;
+            opt.textContent = d.name;
+            distSelect.appendChild(opt);
+        });
+        distSelect.disabled = false;
+    } else { distSelect.disabled = true; }
+}
+
+loadProvinces(); // Thay link Zalo thật vào đây
+
+        function openZalo() {
+            window.open(ZALO_URL, '_blank');
+        }
+
+        function openPopup(type) {
+            if (typeof setChatOpen === 'function') {
+                setChatOpen(false);
+            }
+            document.getElementById('product_type').value = type;
+            const titleEl = document.querySelector('#leadPopup h2');
+            const cicFields = document.getElementById('cicFields');
+            const idNumber = document.getElementById('id_number');
+            const dateOfBirth = document.getElementById('date_of_birth');
+
+            if (type === 'check_cic') {
+                titleEl.textContent = 'Đăng ký kiểm tra CIC sơ bộ';
+                cicFields.classList.remove('hidden');
+                idNumber.required = true;
+                dateOfBirth.required = true;
+            } else {
+                titleEl.textContent = 'Đăng ký tư vấn';
+                cicFields.classList.add('hidden');
+                idNumber.required = false;
+                dateOfBirth.required = false;
+                idNumber.value = '';
+                dateOfBirth.value = '';
+            }
+            document.getElementById('leadPopup').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+        function closePopup() {
+            document.getElementById('leadPopup').classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+        const chatBackdrop = document.getElementById('chatBackdrop');
+        const chatWidget = document.getElementById('chatWidget');
+        let chatViewportFrame = 0;
+        let lockedScrollY = 0;
+
+        function updateChatViewportVars() {
+            const isMobile = window.matchMedia('(max-width: 640px)').matches;
+            const openOnMobile = isMobile && document.body.classList.contains('chat-open-mobile');
+            if (!openOnMobile) {
+                document.documentElement.style.setProperty('--chat-kb', '0px');
+                return;
+            }
+
+            const visualViewport = window.visualViewport;
+            const keyboardHeight = visualViewport
+                ? Math.max(0, Math.round(window.innerHeight - visualViewport.height - visualViewport.offsetTop))
+                : 0;
+
+            document.documentElement.style.setProperty('--chat-kb', `${keyboardHeight}px`);
+        }
+
+        function scheduleChatViewportUpdate() {
+            if (chatViewportFrame) cancelAnimationFrame(chatViewportFrame);
+            chatViewportFrame = requestAnimationFrame(updateChatViewportVars);
+        }
+
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', scheduleChatViewportUpdate);
+            window.visualViewport.addEventListener('scroll', scheduleChatViewportUpdate);
+        }
+        window.addEventListener('resize', scheduleChatViewportUpdate);
+
+        function setChatOpen(open) {
+            const isMobile = window.matchMedia('(max-width: 640px)').matches;
+            chatWidget.classList.toggle('is-open', open);
+            document.getElementById('chatBox').classList.toggle('hidden', !open);
+            chatBackdrop.classList.toggle('hidden', !(open && isMobile));
+            document.body.classList.toggle('chat-open-mobile', open && isMobile);
+            if (open && isMobile) {
+                lockedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+                document.body.style.position = 'fixed';
+                document.body.style.top = `-${lockedScrollY}px`;
+                document.body.style.left = '0';
+                document.body.style.right = '0';
+                document.body.style.width = '100%';
+                document.body.style.overflow = 'hidden';
+                scheduleChatViewportUpdate();
+            } else {
+                const restoreScrollY = lockedScrollY;
+                document.body.style.position = '';
+                document.body.style.top = '';
+                document.body.style.left = '';
+                document.body.style.right = '';
+                document.body.style.width = '';
+                document.body.style.overflow = '';
+                document.documentElement.style.setProperty('--chat-kb', '0px');
+                if (!open && isMobile) {
+                    window.scrollTo(0, restoreScrollY);
+                }
+            }
+
+            if (open) {
+                requestAnimationFrame(() => {
+                    chatInput.focus({ preventScroll: true });
+                    scrollChatToBottom();
+                });
+            } else {
+                document.documentElement.style.setProperty('--chat-kb', '0px');
+            }
+        }
+
+        function toggleChat() {
+            setChatOpen(document.getElementById('chatBox').classList.contains('hidden'));
+        }
+        function openChat() {
+            setChatOpen(true);
+        }
+
+        const chatInput = document.getElementById('chatInput');
+        const chatSendButton = document.getElementById('chatSendButton');
+        const chatMessages = document.getElementById('chatMessages');
+        const chatForm = document.getElementById('chatForm');
+        const chatSessionKey = 'shbfinance_chat_session_id';
+        let chatBusy = false;
+
+        function getChatSessionId() {
+            let sessionId = localStorage.getItem(chatSessionKey);
+            if (!sessionId) {
+                sessionId = `chat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+                localStorage.setItem(chatSessionKey, sessionId);
+            }
+            return sessionId;
+        }
+
+        function getPhoneFromMessage(message) {
+            const match = String(message || '').match(/(0[35789][0-9]{8})/);
+            return match ? match[0] : '';
+        }
+
+        function scrollChatToBottom() {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function appendBubble({ role = 'bot', text = '', loading = false }) {
+            const row = document.createElement('div');
+            row.className = role === 'user' ? 'text-right' : 'flex gap-2';
+
+            if (role !== 'user') {
+                const avatar = document.createElement('img');
+                avatar.src = '/assets/avatar-chatbot.png';
+                avatar.alt = 'Bot';
+                avatar.className = 'w-6 h-6 rounded-full self-end';
+                row.appendChild(avatar);
+            }
+
+            const bubble = document.createElement('div');
+            bubble.className = role === 'user'
+                ? 'bg-blue-100 p-2 rounded-lg inline-block max-w-[80%] whitespace-pre-line'
+                : 'bg-gray-100 p-2 rounded-lg inline-block max-w-[80%] whitespace-pre-line';
+
+            if (loading) {
+                bubble.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+            } else {
+                bubble.textContent = text;
+            }
+
+            row.appendChild(bubble);
+            chatMessages.appendChild(row);
+            scrollChatToBottom();
+            return row;
+        }
+
+        function setChatBusy(nextBusy) {
+            chatBusy = nextBusy;
+            chatInput.disabled = nextBusy;
+            chatSendButton.disabled = nextBusy;
+            chatSendButton.classList.toggle('opacity-50', nextBusy);
+            chatSendButton.classList.toggle('cursor-not-allowed', nextBusy);
+        }
+
+        function shouldCaptureChatLead(message) {
+            const text = String(message || '').toLowerCase();
+            const hasPhone = !!getPhoneFromMessage(text);
+            const hotKeywords = ['vay', 'mở thẻ', 'mo the', 'thẻ', 'the', 'cic', 'nợ xấu', 'no xau', 'lãi suất', 'lai suat', 'hạn mức', 'han muc', 'giải ngân', 'giai ngan', 'sung túc', 'sung tuc'];
+            return hasPhone || hotKeywords.some(keyword => text.includes(keyword));
+        }
+
+        async function queueLeadCapture(message, sessionId) {
+            try {
+                await fetch('/api/finance-leads', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        phone: getPhoneFromMessage(message),
+                        message,
+                        source: 'chatbot',
+                        chat_session_id: sessionId,
+                        page_url: location.href
+                    })
+                });
+            } catch (err) {
+                console.warn('Lead capture failed:', err);
+            }
+        }
+
+        function bindChatEnterKey() {
+            chatInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    sendMessage();
+                }
+            });
+
+            chatForm.addEventListener('submit', (event) => {
+                event.preventDefault();
+                sendMessage();
+            });
+        }
+
+        bindChatEnterKey();
+
+        document.getElementById('leadForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+            data.source = 'landing_web';
+            data.cta_position = 'popup_form';
+            
+            try {
+                const res = await fetch('/api/finance-leads', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (result.success) {
+                    alert('Cảm ơn bạn! Chúng tôi sẽ liên hệ tư vấn sớm nhất.');
+                    closePopup();
+                    e.target.reset();
+                } else {
+                    alert('Có lỗi xảy ra: ' + result.error);
+                }
+            } catch (err) {
+                alert('Không thể gửi yêu cầu. Vui lòng thử lại sau.');
+            }
+        };
+
+        async function sendMessage() {
+            if (chatBusy) return;
+
+            const msg = chatInput.value.trim();
+            if (!msg) return;
+
+            const sessionId = getChatSessionId();
+            const phone = getPhoneFromMessage(msg);
+            const startTime = Date.now();
+
+            appendBubble({ role: 'user', text: msg });
+            chatInput.value = '';
+            setChatBusy(true);
+
+            const typingRow = appendBubble({ role: 'bot', loading: true });
+
+            if (shouldCaptureChatLead(msg)) {
+                queueLeadCapture(msg, sessionId);
+            }
+
+            try {
+                const res = await fetch('/api/chatbot/message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: msg,
+                        session_id: sessionId,
+                        page_url: location.href,
+                        source: 'chatbot'
+                    })
+                });
+
+                const data = await res.json().catch(() => ({}));
+                const elapsed = Date.now() - startTime;
+                if (elapsed < 700) {
+                    await new Promise(resolve => setTimeout(resolve, 700 - elapsed));
+                }
+
+                typingRow.remove();
+
+                const reply = data.reply || 'AI chưa trả lời được lúc này. Vui lòng thử lại sau.';
+                appendBubble({ role: 'bot', text: reply });
+            } catch (err) {
+                typingRow.remove();
+                appendBubble({ role: 'bot', text: 'AI đang gặp lỗi kết nối. Vui lòng thử lại sau.' });
+            } finally {
+                setChatBusy(false);
+                if (window.matchMedia('(max-width: 640px)').matches) {
+                    chatInput.blur();
+                } else {
+                    chatInput.focus({ preventScroll: true });
+                }
+            }
+        }
+    </script>
+</body>
+</html>
+
