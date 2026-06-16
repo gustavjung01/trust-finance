@@ -12,16 +12,10 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/icons/shbfinance-icon.svg",
+      "src": "/icons/shbfinance-icon.svg?v=20260616-3",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
-    },
-    {
-      "src": "/assets/avatar-chatbot.png",
-      "sizes": "353x399",
-      "type": "image/png",
-      "purpose": "any"
     }
   ],
   "shortcuts": [
@@ -31,7 +25,7 @@
       "url": "/?source=pwa&action=consulting",
       "icons": [
         {
-          "src": "/icons/shbfinance-icon.svg",
+          "src": "/icons/shbfinance-icon.svg?v=20260616-3",
           "sizes": "any",
           "type": "image/svg+xml"
         }
