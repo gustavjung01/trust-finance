@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">SHBFinance</title>
+  <desc id="desc">SHBFinance PWA icon</desc>
+  <rect width="512" height="512" rx="112" fill="#0F3B75"/>
+  <path d="M0 356c84-56 175-82 273-78 90 3 167 30 239 76v158H0z" fill="#F58220" opacity=".95"/>
+  <circle cx="386" cy="126" r="58" fill="#fff" opacity=".13"/>
+  <text x="256" y="248" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="104" font-weight="800" fill="#fff">SHB</text>
+  <text x="256" y="326" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="700" fill="#fff">Finance</text>
+</svg>
