@@ -14,6 +14,7 @@ const publicDir = path.join(__dirname, '../public');
 const indexHtmlPath = path.join(publicDir, 'index.html');
 const bootVersion = process.env.VERCEL_GIT_COMMIT_SHA || process.env.SOURCE_VERSION || String(Date.now());
 const bootBuiltAt = new Date().toISOString();
+const pwaAssetVersion = '20260616-2';
 
 app.use(cors());
 app.use(bodyParser.json({ limit: '2mb' }));
@@ -38,11 +39,12 @@ function pwaHeadTags() {
 }
 
 function pwaBodyScripts() {
+    const versionQuery = `?v=${pwaAssetVersion}`;
     return `
-    <script src="/open-external-browser.js" defer></script>
-    <script src="/pwa-install-button.js" defer></script>
-    <script src="/pwa-update-toast.js" defer></script>
-    <script src="/pwa-register.js" defer></script>`;
+    <script src="/open-external-browser.js${versionQuery}" defer></script>
+    <script src="/pwa-install-button.js${versionQuery}" defer></script>
+    <script src="/pwa-update-toast.js${versionQuery}" defer></script>
+    <script src="/pwa-register.js${versionQuery}" defer></script>`;
 }
 
 function injectPwa(html) {
