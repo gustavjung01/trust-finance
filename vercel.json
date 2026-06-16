@@ -12,25 +12,25 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
+      "src": "^/api/(.*)$",
       "dest": "src/index.js"
     },
     {
-      "src": "/app-version.json",
+      "src": "^/app-version\\.json$",
       "dest": "src/index.js",
       "headers": {
         "Cache-Control": "no-cache, no-store, must-revalidate"
       }
     },
     {
-      "src": "/service-worker.js",
+      "src": "^/service-worker\\.js$",
       "dest": "public/service-worker.js",
       "headers": {
         "Cache-Control": "no-cache, no-store, must-revalidate"
       }
     },
     {
-      "src": "/manifest.webmanifest",
+      "src": "^/manifest\\.webmanifest$",
       "dest": "public/manifest.webmanifest",
       "headers": {
         "Cache-Control": "no-cache",
@@ -38,15 +38,15 @@
       }
     },
     {
-      "src": "/",
+      "src": "^/$",
       "dest": "src/index.js"
     },
     {
-      "src": "/index.html",
+      "src": "^/index\\.html$",
       "dest": "src/index.js"
     },
     {
-      "src": "/(.*)",
+      "src": "^/(.*)$",
       "dest": "public/$1"
     }
   ]
