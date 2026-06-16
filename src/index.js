@@ -2,6 +2,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const app = express();
@@ -9,9 +10,91 @@ const port = process.env.PORT || 3000;
 const adminAuth = require('./middleware/adminAuth');
 const leadStore = require('./services/leadStore');
 
+const publicDir = path.join(__dirname, '../public');
+const indexHtmlPath = path.join(publicDir, 'index.html');
+const bootVersion = process.env.VERCEL_GIT_COMMIT_SHA || process.env.SOURCE_VERSION || String(Date.now());
+const bootBuiltAt = new Date().toISOString();
+
 app.use(cors());
 app.use(bodyParser.json({ limit: '2mb' }));
-app.use(express.static(path.join(__dirname, '../public')));
+
+function withNoStore(res) {
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+}
+
+function pwaHeadTags() {
+    return `
+    <meta name="theme-color" content="#0F3B75">
+    <meta name="application-name" content="SHBFinance">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SHBFinance">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/assets/avatar-chatbot.png">
+    <link rel="icon" href="/icons/shbfinance-icon.svg" type="image/svg+xml">`;
+}
+
+function pwaBodyScripts() {
+    return `
+    <script src="/open-external-browser.js" defer></script>
+    <script src="/pwa-update-toast.js" defer></script>
+    <script src="/pwa-register.js" defer></script>`;
+}
+
+function injectPwa(html) {
+    let output = html;
+
+    if (!output.includes('/manifest.webmanifest')) {
+        output = output.replace('</head>', `${pwaHeadTags()}\n</head>`);
+    }
+
+    if (!output.includes('/pwa-register.js')) {
+        output = output.replace('</body>', `${pwaBodyScripts()}\n</body>`);
+    }
+
+    return output;
+}
+
+function sendLandingPage(req, res) {
+    fs.readFile(indexHtmlPath, 'utf8', (err, html) => {
+        if (err) {
+            res.status(500).send('Cannot load landing page');
+            return;
+        }
+
+        res.type('html').send(injectPwa(html));
+    });
+}
+
+app.get(['/', '/index.html'], sendLandingPage);
+
+app.get('/app-version.json', (req, res) => {
+    withNoStore(res);
+    res.json({
+        version: bootVersion,
+        git: process.env.VERCEL_GIT_COMMIT_SHA || process.env.SOURCE_VERSION || null,
+        builtAt: bootBuiltAt
+    });
+});
+
+app.get('/service-worker.js', (req, res) => {
+    withNoStore(res);
+    res.type('application/javascript').sendFile(path.join(publicDir, 'service-worker.js'));
+});
+
+app.get('/manifest.webmanifest', (req, res) => {
+    res.set('Cache-Control', 'no-cache');
+    res.type('application/manifest+json').sendFile(path.join(publicDir, 'manifest.webmanifest'));
+});
+
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(publicDir, 'admin/index.html'));
+});
+
+app.use(express.static(publicDir));
 
 app.set('store', leadStore);
 app.set('db', leadStore);
@@ -51,10 +134,6 @@ app.use('/api', financeLeadsRouter);
 
 app.get('/api/admin/auth-check', adminAuth, (req, res) => {
     res.json({ success: true, ...getConfigStatus() });
-});
-
-app.get('/admin', (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/admin/index.html'));
 });
 
 // Settings API
