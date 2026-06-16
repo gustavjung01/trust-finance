@@ -14,7 +14,7 @@ const publicDir = path.join(__dirname, '../public');
 const indexHtmlPath = path.join(publicDir, 'index.html');
 const bootVersion = process.env.VERCEL_GIT_COMMIT_SHA || process.env.SOURCE_VERSION || String(Date.now());
 const bootBuiltAt = new Date().toISOString();
-const pwaAssetVersion = '20260616-2';
+const pwaAssetVersion = '20260616-3';
 
 app.use(cors());
 app.use(bodyParser.json({ limit: '2mb' }));
@@ -34,8 +34,8 @@ function pwaHeadTags() {
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="SHBFinance">
     <link rel="manifest" href="/manifest.webmanifest">
-    <link rel="apple-touch-icon" href="/assets/avatar-chatbot.png">
-    <link rel="icon" href="/icons/shbfinance-icon.svg" type="image/svg+xml">`;
+    <link rel="apple-touch-icon" href="/icons/shbfinance-icon.svg?v=20260616-3">
+    <link rel="icon" href="/icons/shbfinance-icon.svg?v=20260616-3" type="image/svg+xml">`;
 }
 
 function pwaBodyScripts() {
