@@ -16,6 +16,36 @@
       "dest": "src/index.js"
     },
     {
+      "src": "/app-version.json",
+      "dest": "src/index.js",
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate"
+      }
+    },
+    {
+      "src": "/service-worker.js",
+      "dest": "public/service-worker.js",
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate"
+      }
+    },
+    {
+      "src": "/manifest.webmanifest",
+      "dest": "public/manifest.webmanifest",
+      "headers": {
+        "Cache-Control": "no-cache",
+        "Content-Type": "application/manifest+json"
+      }
+    },
+    {
+      "src": "/",
+      "dest": "src/index.js"
+    },
+    {
+      "src": "/index.html",
+      "dest": "src/index.js"
+    },
+    {
       "src": "/(.*)",
       "dest": "public/$1"
     }
