@@ -47,8 +47,24 @@ function pwaBodyScripts() {
     <script src="/pwa-register.js${versionQuery}" defer></script>`;
 }
 
+function injectHeaderHotline(html) {
+    if (html.includes('tel:0969155751')) return html;
+
+    const oldHeaderRight = '<div class="text-sm text-gray-500 hidden md:block">Hỗ trợ tư vấn sản phẩm tài chính</div>';
+    const hotlineHeaderRight = `
+            <div class="flex items-center gap-2">
+                <span class="hidden text-sm text-gray-500 lg:inline">Hỗ trợ tư vấn sản phẩm tài chính</span>
+                <a href="tel:0969155751" aria-label="Gọi hotline 0969 155 751" class="inline-flex items-center gap-1 rounded-full bg-[#0F3B75] px-3 py-2 text-sm font-extrabold text-white shadow-sm transition hover:bg-blue-900">
+                    <span class="hidden sm:inline">Hotline:</span>
+                    <span>0969 155 751</span>
+                </a>
+            </div>`;
+
+    return html.replace(oldHeaderRight, hotlineHeaderRight);
+}
+
 function injectPwa(html) {
-    let output = html;
+    let output = injectHeaderHotline(html);
 
     if (!output.includes('/manifest.webmanifest')) {
         output = output.replace('</head>', `${pwaHeadTags()}\n</head>`);
