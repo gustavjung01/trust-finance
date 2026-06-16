@@ -1,10 +1,11 @@
-const CACHE_VERSION = "shbfinance-pwa-v1";
+const CACHE_VERSION = "shbfinance-pwa-v2";
 
 const APP_SHELL = [
   "/",
   "/index.html",
   "/manifest.webmanifest",
   "/pwa-register.js",
+  "/pwa-install-button.js",
   "/pwa-update-toast.js",
   "/open-external-browser.js",
   "/icons/shbfinance-icon.svg",
