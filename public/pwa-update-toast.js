@@ -2,6 +2,8 @@
   var KEY = "shbfinance_app_version";
   var busy = false;
   var updateReady = false;
+  var refreshing = false;
+  var pendingWorker = null;
 
   function injectStyle() {
     if (document.getElementById("pwa-update-toast-style")) return;
@@ -25,20 +27,55 @@
     box.id = "pwa-update-toast";
     box.className = "pwa-update-toast";
     box.innerHTML =
-      "<div><strong>Có bản mới</strong><span>Bấm cập nhật để dùng phiên bản mới nhất.</span></div>" +
+      "<div><strong>Có bản mới</strong><span>Bấm cập nhật để tải phiên bản mới nhất.</span></div>" +
       "<button type='button'>Cập nhật</button>";
 
-    box.querySelector("button").addEventListener("click", function () {
-      window.location.reload();
-    });
-
+    box.querySelector("button").addEventListener("click", applyUpdate);
     document.body.appendChild(box);
+  }
+
+  function applyUpdate() {
+    if (pendingWorker && pendingWorker.postMessage) {
+      pendingWorker.postMessage({ type: "SKIP_WAITING" });
+      setTimeout(function () {
+        if (!refreshing) window.location.reload();
+      }, 900);
+      return;
+    }
+
+    window.location.reload();
+  }
+
+  function watchRegistration(reg) {
+    if (!reg) return;
+
+    if (reg.waiting) {
+      pendingWorker = reg.waiting;
+      updateReady = true;
+      showToast();
+    }
+
+    reg.addEventListener("updatefound", function () {
+      var worker = reg.installing;
+      if (!worker) return;
+
+      worker.addEventListener("statechange", function () {
+        if (worker.state === "installed" && navigator.serviceWorker.controller) {
+          pendingWorker = worker;
+          updateReady = true;
+          showToast();
+        }
+      });
+    });
   }
 
   function swUpdate() {
     if (!("serviceWorker" in navigator)) return Promise.resolve();
+
     return navigator.serviceWorker.getRegistration("/").then(function (reg) {
-      if (reg && reg.update) return reg.update();
+      if (!reg) return;
+      watchRegistration(reg);
+      if (reg.update) return reg.update();
     }).catch(function () {});
   }
 
@@ -78,6 +115,16 @@
 
   function checkVisible() {
     if (document.visibilityState === "visible") check();
+  }
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
+
+    navigator.serviceWorker.ready.then(watchRegistration).catch(function () {});
   }
 
   window.addEventListener("pageshow", check);
