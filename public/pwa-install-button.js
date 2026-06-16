@@ -1,6 +1,21 @@
 (function () {
+  var STATE_KEY = "shbfinance_pwa_install_card_state";
   var deferredPrompt = null;
   var installed = false;
+
+  function getState() {
+    try {
+      return localStorage.getItem(STATE_KEY) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+
+  function setState(nextState) {
+    try {
+      localStorage.setItem(STATE_KEY, nextState);
+    } catch (err) {}
+  }
 
   function isStandalone() {
     return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
@@ -18,6 +33,17 @@
     return /FBAN|FBAV|FB_IAB|Instagram|Zalo/i.test(navigator.userAgent || "");
   }
 
+  function shouldHideCard() {
+    var state = getState();
+    return installed || isStandalone() || state === "installed" || state === "dismissed";
+  }
+
+  function hideCard(nextState) {
+    var card = document.getElementById("pwaInstallHomeCard");
+    if (nextState) setState(nextState);
+    if (card) card.remove();
+  }
+
   function buildInstallGuide() {
     if (isInAppBrowser()) {
       return isIOS()
@@ -26,7 +52,7 @@
     }
 
     if (isIOS()) {
-      return "Trên iPhone: bấm nút Chia sẻ của Safari, rồi chọn Thêm vào Màn hình chính.";
+      return "Trên iPhone: bấm nút Chia sẻ của Safari, rồi chọn Thêm vào Màn hình chính. Nếu đã thêm rồi, bấm nút X để ẩn khung này.";
     }
 
     if (isAndroid()) {
@@ -38,7 +64,7 @@
 
   async function handleInstallClick() {
     if (installed || isStandalone()) {
-      alert("App đã được mở ở chế độ ứng dụng.");
+      hideCard("installed");
       return;
     }
 
@@ -48,7 +74,7 @@
         var choice = await deferredPrompt.userChoice;
         if (choice && choice.outcome === "accepted") {
           installed = true;
-          updateButtons();
+          hideCard("installed");
         }
       } finally {
         deferredPrompt = null;
@@ -63,20 +89,29 @@
     var button = document.createElement("button");
     button.type = "button";
     button.className = extraClass;
-    button.textContent = isStandalone() ? "Đã cài app" : "Tải app";
+    button.textContent = "Tải app";
     button.setAttribute("data-pwa-install-button", "true");
     button.addEventListener("click", handleInstallClick);
     return button;
   }
 
   function updateButtons() {
-    var text = installed || isStandalone() ? "Đã cài app" : "Tải app";
+    if (shouldHideCard()) {
+      hideCard(getState() === "installed" ? null : undefined);
+      return;
+    }
+
     document.querySelectorAll("[data-pwa-install-button]").forEach(function (button) {
-      button.textContent = text;
+      button.textContent = "Tải app";
     });
   }
 
   function addHomeInstallCard() {
+    if (shouldHideCard()) {
+      hideCard();
+      return;
+    }
+
     if (document.getElementById("pwaInstallHomeCard")) return;
 
     var heroActions = document.querySelector("main section .flex.flex-wrap.justify-center.gap-4");
@@ -84,7 +119,16 @@
 
     var card = document.createElement("div");
     card.id = "pwaInstallHomeCard";
-    card.className = "mx-auto mt-6 max-w-2xl rounded-3xl border border-blue-100 bg-white p-4 shadow-xl md:flex md:items-center md:justify-between md:gap-5";
+    card.className = "relative mx-auto mt-6 max-w-2xl rounded-3xl border border-blue-100 bg-white p-4 pr-12 shadow-xl md:flex md:items-center md:justify-between md:gap-5";
+
+    var closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.setAttribute("aria-label", "Ẩn nút tải app");
+    closeButton.className = "absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-gray-100 text-lg font-bold leading-none text-gray-500 transition hover:bg-gray-200 hover:text-gray-700";
+    closeButton.innerHTML = "&times;";
+    closeButton.addEventListener("click", function () {
+      hideCard("dismissed");
+    });
 
     var copy = document.createElement("div");
     copy.className = "mb-4 text-left md:mb-0";
@@ -97,6 +141,7 @@
     var button = makeButton("w-full rounded-2xl bg-[#F58220] px-6 py-3 text-base font-extrabold text-white shadow-lg transition hover:bg-orange-600 md:w-auto md:min-w-32");
     button.id = "pwaInstallHomeButton";
 
+    card.appendChild(closeButton);
     card.appendChild(copy);
     card.appendChild(button);
     heroActions.insertAdjacentElement("afterend", card);
@@ -112,6 +157,12 @@
 
   function init() {
     removeOldFixedMenuButton();
+
+    if (isStandalone()) {
+      hideCard("installed");
+      return;
+    }
+
     addHomeInstallCard();
     updateButtons();
   }
@@ -125,7 +176,7 @@
   window.addEventListener("appinstalled", function () {
     installed = true;
     deferredPrompt = null;
-    updateButtons();
+    hideCard("installed");
   });
 
   if (document.readyState === "loading") {
