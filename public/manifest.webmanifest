@@ -1,0 +1,41 @@
+{
+  "id": "/",
+  "name": "SHBFinance",
+  "short_name": "SHBFinance",
+  "description": "Ứng dụng tư vấn và tiếp nhận yêu cầu hỗ trợ khách hàng SHBFinance.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "background_color": "#F7FAFF",
+  "theme_color": "#0F3B75",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/shbfinance-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/avatar-chatbot.png",
+      "sizes": "353x399",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Đăng ký tư vấn",
+      "short_name": "Tư vấn",
+      "url": "/?source=pwa&action=consulting",
+      "icons": [
+        {
+          "src": "/icons/shbfinance-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ]
+}
