@@ -40,6 +40,7 @@ function pwaHeadTags() {
 function pwaBodyScripts() {
     return `
     <script src="/open-external-browser.js" defer></script>
+    <script src="/pwa-install-button.js" defer></script>
     <script src="/pwa-update-toast.js" defer></script>
     <script src="/pwa-register.js" defer></script>`;
 }
