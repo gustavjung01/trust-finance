@@ -85,6 +85,48 @@ function shouldCaptureChatMessage(message = '') {
   return Boolean(getPhoneFromMessage(message)) || hotKeywords.some(keyword => text.includes(keyword) || noMark.includes(keyword));
 }
 
+function maskSettingValue(value) {
+  const text = String(value || '');
+  if (!text) return '';
+  if (text.length <= 8) return '********';
+  return `${text.slice(0, 4)}...${text.slice(-4)}`;
+}
+
+function makeTelegramConfigDebug(settings = {}) {
+  const botToken = settings.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+  const chatIds = normalizeTelegramChatIds(settings.TELEGRAM_DEFAULT_CHAT_ID || process.env.TELEGRAM_DEFAULT_CHAT_ID);
+  const hasNormalSetting = settingExists(settings, 'notify_finance_chat_lead');
+  const hasHotSetting = settingExists(settings, 'notify_finance_hot_lead');
+  const defaultNotify = !hasNormalSetting && !hasHotSetting;
+
+  return {
+    tokenConfigured: Boolean(botToken),
+    tokenPreview: botToken ? maskSettingValue(botToken) : '',
+    chatIdsCount: chatIds.length,
+    chatIdPreview: chatIds.map(maskSettingValue),
+    notifyFinanceChatLeadRaw: settings.notify_finance_chat_lead ?? null,
+    notifyFinanceHotLeadRaw: settings.notify_finance_hot_lead ?? null,
+    notifyFinanceChatLeadEnabled: settingEnabled(settings.notify_finance_chat_lead, defaultNotify),
+    notifyFinanceHotLeadEnabled: settingEnabled(settings.notify_finance_hot_lead, defaultNotify || settingEnabled(settings.notify_finance_chat_lead, defaultNotify)),
+    defaultNotify
+  };
+}
+
+function makeNotifyDebug(result = {}) {
+  return {
+    sent: Boolean(result.sent),
+    reason: result.reason || null,
+    results: Array.isArray(result.results)
+      ? result.results.map(item => ({
+          success: Boolean(item.success),
+          reason: item.reason || null,
+          error: item.error || null,
+          chatId: maskSettingValue(item.chatId || '')
+        }))
+      : []
+  };
+}
+
 async function telegramSendMessage({ chatId, text, token }) {
   if (!token) return { success: false, reason: 'no_token' };
   try {
@@ -96,11 +138,11 @@ async function telegramSendMessage({ chatId, text, token }) {
     return { success: true };
   } catch (error) {
     console.error('Telegram error:', error.response?.data || error.message);
-    return { success: false, error: error.message };
+    return { success: false, error: error.response?.data?.description || error.message };
   }
 }
 
-async function notifyLeadIfNeeded({ lead, previousLead, scored, settings }) {
+async function notifyLeadIfNeeded({ lead, previousLead, settings }) {
   const botToken = settings.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
   const chatIds = normalizeTelegramChatIds(settings.TELEGRAM_DEFAULT_CHAT_ID || process.env.TELEGRAM_DEFAULT_CHAT_ID);
 
@@ -117,7 +159,7 @@ async function notifyLeadIfNeeded({ lead, previousLead, scored, settings }) {
 
   const shouldNotifyNormal = notifyNormalEnabled && !lead.is_hot && !lead.telegram_sent;
   const shouldNotifyHot = notifyHotEnabled && !!lead.is_hot && !lead.telegram_hot_sent;
-  const shouldNotifyContactUpdate = notifyNormalEnabled && contactJustAdded && !lead.telegram_sent;
+  const shouldNotifyContactUpdate = (notifyNormalEnabled || notifyHotEnabled) && contactJustAdded && !lead.telegram_sent;
 
   if (!shouldNotifyNormal && !shouldNotifyHot && !shouldNotifyContactUpdate) {
     return { sent: false, reason: 'already_notified_or_disabled' };
@@ -213,7 +255,7 @@ router.post('/finance-leads', async (req, res) => {
     const scored = scoreFinanceLead(payload);
     const { lead, previousLead } = await saveFinanceLead(payload, scored);
     const settings = await leadStore.getSettings();
-    await notifyLeadIfNeeded({ lead, previousLead, scored, settings });
+    const notifyResult = await notifyLeadIfNeeded({ lead, previousLead, settings });
 
     return res.json({
       success: true,
@@ -221,7 +263,8 @@ router.post('/finance-leads', async (req, res) => {
         id: lead.id,
         lead_code: lead.lead_code,
         is_hot: lead.is_hot,
-        hot_reasons: scored.hotReasons
+        hot_reasons: scored.hotReasons,
+        telegram: makeNotifyDebug(notifyResult)
       }
     });
   } catch (err) {
@@ -241,6 +284,7 @@ router.post('/chatbot/message', async (req, res) => {
     const sessionId = makeSessionId(req.body?.session_id || req.body?.chat_session_id || req.body?.conversation_id);
     const credentialsJson = getDialogflowCredentialsJson(settings);
     const enabled = settings.enable_chatbot === 'true' || settings.enable_chatbot === true || process.env.ENABLE_CHATBOT === 'true';
+    let captureDebug = null;
 
     if (shouldCaptureChatMessage(message)) {
       try {
@@ -254,9 +298,23 @@ router.post('/chatbot/message', async (req, res) => {
         });
         const scored = scoreFinanceLead(payload);
         const { lead, previousLead } = await saveFinanceLead(payload, scored);
-        await notifyLeadIfNeeded({ lead, previousLead, scored, settings });
+        const notifyResult = await notifyLeadIfNeeded({ lead, previousLead, settings });
+        captureDebug = {
+          captured: true,
+          leadId: lead.id,
+          leadCode: lead.lead_code,
+          phone: lead.normalized_phone || lead.phone || '',
+          isHot: Boolean(lead.is_hot),
+          hotReasons: scored.hotReasons,
+          telegram: makeNotifyDebug(notifyResult)
+        };
       } catch (captureErr) {
         console.error('[chatbot/message] lead capture failed:', captureErr.message);
+        captureDebug = {
+          captured: false,
+          error: captureErr.code || 'capture_failed',
+          message: captureErr.message
+        };
       }
     }
 
@@ -274,7 +332,8 @@ router.post('/chatbot/message', async (req, res) => {
       reply: result.reply,
       replies: result.replies,
       session_id: result.sessionId || sessionId,
-      fallback_reason: result.reason || null
+      fallback_reason: result.reason || null,
+      capture: captureDebug
     });
   } catch (err) {
     console.error('[chatbot/message] failed:', err.message);
@@ -307,6 +366,51 @@ router.patch('/admin/finance-leads/:id/status', adminAuth, async (req, res) => {
     res.json({ success: true, updated: result.changes });
   } catch (err) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/admin/finance-leads/test-chat-lead', adminAuth, async (req, res) => {
+  try {
+    const settings = await leadStore.getSettings();
+    const message = String(req.body?.message || 'em cần gấp, số của em 0902964685').trim();
+    const sessionId = String(req.body?.session_id || `admin-test-chat-${Date.now()}`).trim();
+    const payload = cleanPayload({
+      phone: getPhoneFromMessage(message) || req.body?.phone || '',
+      message,
+      source: 'chatbot',
+      chat_session_id: sessionId,
+      page_url: req.body?.page_url || 'admin-test',
+      product_type: req.body?.product_type || 'consulting'
+    });
+    const scored = scoreFinanceLead(payload);
+    const { lead, previousLead } = await saveFinanceLead(payload, scored);
+    const notifyResult = await notifyLeadIfNeeded({ lead, previousLead, settings });
+
+    return res.json({
+      success: true,
+      test: {
+        message,
+        sessionId,
+        shouldCapture: shouldCaptureChatMessage(message),
+        phoneDetected: getPhoneFromMessage(message),
+        leadId: lead.id,
+        leadCode: lead.lead_code,
+        leadPhone: lead.normalized_phone || lead.phone || '',
+        isHot: Boolean(lead.is_hot),
+        hotReasons: scored.hotReasons,
+        wasExistingLead: Boolean(previousLead),
+        contactJustAdded: Boolean(previousLead && !hasLeadContact(previousLead) && hasLeadContact(lead))
+      },
+      telegramConfig: makeTelegramConfigDebug(settings),
+      telegram: makeNotifyDebug(notifyResult)
+    });
+  } catch (err) {
+    console.error('[test-chat-lead] failed:', err.message);
+    return res.status(err.status || 500).json({
+      success: false,
+      error: err.code || 'test_chat_lead_failed',
+      message: err.message
+    });
   }
 });
 
