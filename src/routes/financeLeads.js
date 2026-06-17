@@ -220,23 +220,88 @@ function normalizeLeadPhoneValue(lead = {}) {
   return String(lead.normalized_phone || lead.phone || '').trim();
 }
 
-async function sendTelegramLeadNotifications({ lead, settings, extraLines = [], forceSend = false }) {
+function hasValidPhone(value) {
+  return Boolean(getPhoneFromMessage(String(value || '')) || isVietnamesePhone(String(value || '').trim()));
+}
+
+function hasLeadContact(lead = {}) {
+  return hasValidPhone(normalizeLeadPhoneValue(lead));
+}
+
+function getCurrentMessagePhone(payload = {}, lead = {}) {
+  return String(
+    getPhoneFromMessage(payload.message || '')
+    || payload.phone
+    || lead.normalized_phone
+    || lead.phone
+    || ''
+  ).trim();
+}
+
+async function notifyLeadIfNeeded({
+  lead,
+  previousLead = null,
+  settings,
+  currentMessageHasPhone = false,
+  phoneJustAdded = false,
+  phoneChanged = false,
+  extraLines = [],
+  forceSend = false
+}) {
   const telegram = resolveTelegramConfig(settings);
   if (!telegram.tokenConfigured || telegram.chatIdsCount === 0) {
-    return { sent: false, reason: 'missing_telegram_config', results: [], config: telegram };
+    return {
+      sent: false,
+      reason: 'missing_telegram_config',
+      results: [],
+      config: telegram,
+      phoneNotify: false,
+      phoneJustAdded: Boolean(phoneJustAdded),
+      phoneChanged: Boolean(phoneChanged),
+      currentMessageHasPhone: Boolean(currentMessageHasPhone)
+    };
   }
 
   const isHot = Boolean(lead.is_hot);
+  const notifyNormalEnabled = telegram.notifyFinanceChatLeadEnabled;
+  const notifyHotEnabled = telegram.notifyFinanceHotLeadEnabled;
+  const currentPhone = normalizeLeadPhoneValue(lead);
+  const previousPhone = normalizeLeadPhoneValue(previousLead || {});
+  const phoneWasAddedNow = Boolean(previousLead && !hasLeadContact(previousLead) && hasLeadContact(lead));
+  const phoneDidChange = Boolean(previousLead && previousPhone && currentPhone && previousPhone !== currentPhone);
+  const shouldNotifyPhone = Boolean(
+    notifyNormalEnabled
+    && (currentMessageHasPhone || phoneWasAddedNow || phoneJustAdded || phoneDidChange || phoneChanged)
+    && (!lead.telegram_phone_sent || phoneWasAddedNow || phoneJustAdded || phoneDidChange || phoneChanged)
+  );
   const alreadyNotified = isHot ? Boolean(lead.telegram_hot_sent) : Boolean(lead.telegram_sent);
-  const enabled = isHot ? telegram.notifyFinanceHotLeadEnabled : telegram.notifyFinanceChatLeadEnabled;
-  const shouldSend = forceSend || (enabled && !alreadyNotified);
+  const enabled = isHot ? notifyHotEnabled : notifyNormalEnabled;
+  const shouldSend = forceSend || shouldNotifyPhone || (enabled && !alreadyNotified);
 
   if (!shouldSend) {
-    return { sent: false, reason: 'already_notified_or_disabled', results: [], config: telegram };
+    return {
+      sent: false,
+      reason: 'already_notified_or_disabled',
+      results: [],
+      config: telegram,
+      phoneNotify: false,
+      phoneJustAdded: Boolean(phoneJustAdded || phoneWasAddedNow),
+      phoneChanged: Boolean(phoneChanged || phoneDidChange),
+      currentMessageHasPhone: Boolean(currentMessageHasPhone)
+    };
   }
 
+  const leadForTelegram = shouldNotifyPhone
+    ? {
+        ...lead,
+        message: [String(lead.message || '').trim(), 'Khách vừa gửi/bổ sung SĐT trong chat.']
+          .filter(Boolean)
+          .join('\n')
+      }
+    : lead;
+
   const text = buildTelegramMessage(
-    lead,
+    leadForTelegram,
     isHot ? 'hot' : 'normal',
     extraLines
   );
@@ -259,18 +324,37 @@ async function sendTelegramLeadNotifications({ lead, settings, extraLines = [], 
 
   return {
     sent,
-    reason: sent ? 'sent' : (hasChatNotFound ? 'telegram_chat_not_found' : 'telegram_send_failed'),
+    reason: sent
+      ? (shouldNotifyPhone ? 'phone_notified' : 'sent')
+      : (hasChatNotFound ? 'telegram_chat_not_found' : 'telegram_send_failed'),
     results,
-    config: telegram
+    config: telegram,
+    phoneNotify: shouldNotifyPhone,
+    phoneJustAdded: Boolean(phoneJustAdded || phoneWasAddedNow),
+    phoneChanged: Boolean(phoneChanged || phoneDidChange),
+    currentMessageHasPhone: Boolean(currentMessageHasPhone)
   };
 }
 
-async function upsertChatLead(payload, scored, settings) {
+async function sendTelegramLeadNotifications(options) {
+  return notifyLeadIfNeeded(options);
+}
+
+async function upsertChatLead(payload, scored, settings, options = {}) {
   const sessionId = String(payload.chat_session_id || '').trim();
   const existingLead = sessionId ? await leadStore.findLeadByChatSessionId(sessionId) : null;
   const previousPhone = normalizeLeadPhoneValue(existingLead || {});
   const nextPhone = scored.normalizedPhone || existingLead?.normalized_phone || existingLead?.phone || '';
   const contactJustAdded = Boolean(existingLead && nextPhone && previousPhone !== nextPhone);
+  const phoneJustAdded = Boolean(existingLead && !hasLeadContact(existingLead) && nextPhone);
+  const currentPhoneChanged = Boolean(existingLead && previousPhone && nextPhone && previousPhone !== nextPhone);
+  const messagePhoneDetected = Boolean(options.messageHasPhone || getPhoneFromMessage(payload.message || '') || payload.phone);
+  const currentMessageHasPhone = Boolean(
+    messagePhoneDetected
+    || payload.phone
+    || payload.normalized_phone
+    || nextPhone
+  );
   const now = new Date().toISOString();
 
   const mergedLead = {
@@ -300,6 +384,7 @@ async function upsertChatLead(payload, scored, settings) {
     admin_note: existingLead?.admin_note || '',
     telegram_sent: existingLead?.telegram_sent || 0,
     telegram_hot_sent: existingLead?.telegram_hot_sent || 0,
+    telegram_phone_sent: existingLead?.telegram_phone_sent || 0,
     created_at: existingLead?.created_at || now,
     updated_at: now
   };
@@ -325,6 +410,10 @@ async function upsertChatLead(payload, scored, settings) {
       .filter(Boolean),
     wasExistingLead: Boolean(existingLead),
     contactJustAdded,
+    phoneJustAdded,
+    phoneChanged: currentPhoneChanged,
+    currentMessageHasPhone,
+    telegramPhoneSent: toIntFlag(lead.telegram_phone_sent),
     telegramConfig: makeTelegramConfigDebug(settings),
     telegram: {
       sent: false,
@@ -334,28 +423,45 @@ async function upsertChatLead(payload, scored, settings) {
   };
 
   if (scored.shouldCapture || contactJustAdded) {
-    const notification = await sendTelegramLeadNotifications({
+    const notification = await notifyLeadIfNeeded({
       lead,
+      previousLead: existingLead,
       settings,
-      extraLines: contactJustAdded ? ['Ghi chu: Khach vua bo sung SĐT tu chatbot.'] : [],
+      currentMessageHasPhone: messagePhoneDetected,
+      phoneJustAdded,
+      phoneChanged: currentPhoneChanged,
+      extraLines: [],
       forceSend: contactJustAdded
     });
 
     capture.telegram = {
       sent: notification.sent,
       reason: notification.reason,
-      results: notification.results
+      results: notification.results,
+      phoneNotify: Boolean(notification.phoneNotify),
+      phoneJustAdded: Boolean(notification.phoneJustAdded),
+      phoneChanged: Boolean(notification.phoneChanged),
+      currentMessageHasPhone: Boolean(notification.currentMessageHasPhone)
     };
 
     if (notification.sent) {
       await leadStore.updateLeadTelegramFlags(lead.id, {
-        telegramSent: !lead.is_hot && !contactJustAdded,
-        telegramHotSent: lead.is_hot || contactJustAdded
+        telegramSent: !lead.is_hot,
+        telegramHotSent: lead.is_hot,
+        telegramPhoneSent: notification.phoneNotify
       });
     }
   }
 
-  return { lead, previousLead: existingLead, capture };
+  return {
+    lead,
+    previousLead: existingLead,
+    capture,
+    phoneJustAdded,
+    phoneChanged: currentPhoneChanged,
+    currentMessageHasPhone,
+    messagePhoneDetected
+  };
 }
 
 async function saveFinanceLead(payload, scored) {
@@ -399,6 +505,7 @@ async function saveFinanceLead(payload, scored) {
       admin_note: existingLead?.admin_note || '',
       telegram_sent: existingLead?.telegram_sent || 0,
       telegram_hot_sent: existingLead?.telegram_hot_sent || 0,
+      telegram_phone_sent: existingLead?.telegram_phone_sent || 0,
       created_at: existingLead?.created_at || now,
       updated_at: now
     };
@@ -482,6 +589,7 @@ router.post('/chatbot/message', async (req, res) => {
       page_url: req.body?.page_url || '',
       cta_position: req.body?.cta_position || ''
     });
+    const messageHasPhone = Boolean(getPhoneFromMessage(message) || req.body?.phone);
 
     let capture = {
       captured: false,
@@ -490,11 +598,21 @@ router.post('/chatbot/message', async (req, res) => {
       phone: scored.phone,
       isHot: scored.isHot,
       hotReasons: scored.hotReasons,
-      telegram: { sent: false, reason: 'not_captured', results: [] }
+      telegram: {
+        sent: false,
+        reason: 'not_captured',
+        results: [],
+        phoneNotify: false,
+        phoneJustAdded: false,
+        phoneChanged: false,
+        currentMessageHasPhone: false
+      }
     };
 
     if (scored.shouldCapture || await leadStore.findLeadByChatSessionId(sessionId)) {
-      const upsert = await upsertChatLead(payload, scored, settings);
+      const upsert = await upsertChatLead(payload, scored, settings, {
+        messageHasPhone
+      });
       capture = {
         captured: upsert.capture.captured,
         leadId: upsert.capture.leadId,
@@ -502,7 +620,10 @@ router.post('/chatbot/message', async (req, res) => {
         phone: upsert.capture.leadPhone,
         isHot: upsert.capture.isHot,
         hotReasons: upsert.capture.hotReasons,
-        telegram: upsert.capture.telegram
+        telegram: upsert.capture.telegram,
+        phoneJustAdded: upsert.phoneJustAdded,
+        phoneChanged: upsert.phoneChanged,
+        currentMessageHasPhone: upsert.currentMessageHasPhone
       };
     }
 
@@ -560,7 +681,7 @@ router.post('/admin/finance-leads/test-chat-lead', adminAuth, async (req, res) =
   try {
     const settings = await leadStore.getSettings();
     const message = String(req.body?.message || 'em cần gấp, số của em 0902964685').trim();
-    const sessionId = makeSessionId(req.body?.session_id || 'admin-test-chat-001');
+    const sessionId = makeSessionId(req.body?.session_id || `admin-test-chat-${Date.now()}`);
     const scored = scoreChatCapture(message);
     const payload = cleanPayload({
       full_name: req.body?.full_name || 'Admin Test',
@@ -576,8 +697,11 @@ router.post('/admin/finance-leads/test-chat-lead', adminAuth, async (req, res) =
       page_url: req.body?.page_url || '',
       cta_position: req.body?.cta_position || ''
     });
+    const messageHasPhone = Boolean(getPhoneFromMessage(message) || req.body?.phone);
 
-    const upsert = await upsertChatLead(payload, scored, settings);
+    const upsert = await upsertChatLead(payload, scored, settings, {
+      messageHasPhone
+    });
 
     return res.json({
       success: true,
@@ -590,7 +714,11 @@ router.post('/admin/finance-leads/test-chat-lead', adminAuth, async (req, res) =
         isHot: upsert.capture.isHot,
         hotReasons: upsert.capture.hotReasons,
         wasExistingLead: upsert.capture.wasExistingLead,
-        contactJustAdded: upsert.capture.contactJustAdded
+        contactJustAdded: upsert.capture.contactJustAdded,
+        telegramPhoneSent: upsert.capture.telegramPhoneSent,
+        phoneJustAdded: upsert.phoneJustAdded,
+        phoneChanged: upsert.phoneChanged,
+        currentMessageHasPhone: upsert.currentMessageHasPhone
       },
       telegramConfig: upsert.capture.telegramConfig,
       telegram: upsert.capture.telegram

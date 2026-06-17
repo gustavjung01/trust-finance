@@ -33,6 +33,7 @@ const LEAD_FIELDS = [
   'admin_note',
   'telegram_sent',
   'telegram_hot_sent',
+  'telegram_phone_sent',
   'created_at',
   'updated_at'
 ];
@@ -169,11 +170,13 @@ async function ensureDatabaseSchema() {
             admin_note TEXT NOT NULL DEFAULT '',
             telegram_sent INTEGER NOT NULL DEFAULT 0,
             telegram_hot_sent INTEGER NOT NULL DEFAULT 0,
+            telegram_phone_sent INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT '',
             updated_at TEXT NOT NULL DEFAULT ''
           )
         `);
 
+        await client.query('ALTER TABLE finance_leads ADD COLUMN IF NOT EXISTS telegram_phone_sent INTEGER NOT NULL DEFAULT 0');
         await client.query('CREATE INDEX IF NOT EXISTS finance_leads_chat_session_id_idx ON finance_leads (chat_session_id)');
         await client.query('CREATE INDEX IF NOT EXISTS finance_leads_created_at_idx ON finance_leads (created_at)');
         await client.query('CREATE INDEX IF NOT EXISTS finance_leads_normalized_phone_idx ON finance_leads (normalized_phone)');
@@ -277,6 +280,7 @@ function applyLeadUpdates(lead, updates = {}) {
   const aliases = {
     telegramSent: 'telegram_sent',
     telegramHotSent: 'telegram_hot_sent',
+    telegramPhoneSent: 'telegram_phone_sent',
     isHot: 'is_hot',
     chatSessionId: 'chat_session_id',
     dateOfBirth: 'date_of_birth'
@@ -286,7 +290,7 @@ function applyLeadUpdates(lead, updates = {}) {
     const field = aliases[key] || key;
     if (value === undefined || value === null) continue;
 
-    if (field === 'is_hot' || field === 'telegram_sent' || field === 'telegram_hot_sent') {
+    if (field === 'is_hot' || field === 'telegram_sent' || field === 'telegram_hot_sent' || field === 'telegram_phone_sent') {
       lead[field] = toIntFlag(value);
       continue;
     }
@@ -329,6 +333,7 @@ function normalizeLeadRecord(row = {}) {
     admin_note: safeText(row.admin_note),
     telegram_sent: toIntFlag(row.telegram_sent),
     telegram_hot_sent: toIntFlag(row.telegram_hot_sent),
+    telegram_phone_sent: toIntFlag(row.telegram_phone_sent),
     created_at: safeText(row.created_at),
     updated_at: safeText(row.updated_at)
   };
@@ -362,6 +367,7 @@ function leadRecordFromData(leadData = {}, existing = {}) {
     admin_note: leadData.admin_note ?? existing.admin_note ?? '',
     telegram_sent: toIntFlag(leadData.telegram_sent ?? existing.telegram_sent ?? 0),
     telegram_hot_sent: toIntFlag(leadData.telegram_hot_sent ?? existing.telegram_hot_sent ?? 0),
+    telegram_phone_sent: toIntFlag(leadData.telegram_phone_sent ?? existing.telegram_phone_sent ?? 0),
     created_at: leadData.created_at ?? existing.created_at ?? now,
     updated_at: leadData.updated_at ?? existing.updated_at ?? now
   });
@@ -464,10 +470,11 @@ async function updateLeadStatusInDb(id, status) {
   return updateLeadInDb(id, { status });
 }
 
-async function updateLeadTelegramFlagsInDb(id, { telegramSent, telegramHotSent }) {
+async function updateLeadTelegramFlagsInDb(id, { telegramSent, telegramHotSent, telegramPhoneSent }) {
   const updates = {};
   if (telegramSent != null) updates.telegram_sent = telegramSent ? 1 : 0;
   if (telegramHotSent != null) updates.telegram_hot_sent = telegramHotSent ? 1 : 0;
+  if (telegramPhoneSent != null) updates.telegram_phone_sent = telegramPhoneSent ? 1 : 0;
   return updateLeadInDb(id, updates);
 }
 
@@ -550,6 +557,7 @@ async function createLead(leadData = {}) {
       admin_note: leadData.admin_note || '',
       telegram_sent: toIntFlag(leadData.telegram_sent),
       telegram_hot_sent: toIntFlag(leadData.telegram_hot_sent),
+      telegram_phone_sent: toIntFlag(leadData.telegram_phone_sent),
       created_at: leadData.created_at || now,
       updated_at: leadData.updated_at || now
     });
@@ -607,9 +615,9 @@ async function updateLeadStatus(id, status) {
   });
 }
 
-async function updateLeadTelegramFlags(id, { telegramSent, telegramHotSent }) {
+async function updateLeadTelegramFlags(id, { telegramSent, telegramHotSent, telegramPhoneSent }) {
   if (hasDatabaseUrl()) {
-    return withWriteLock(async () => updateLeadTelegramFlagsInDb(id, { telegramSent, telegramHotSent }));
+    return withWriteLock(async () => updateLeadTelegramFlagsInDb(id, { telegramSent, telegramHotSent, telegramPhoneSent }));
   }
 
   return withWriteLock(async () => {
@@ -619,6 +627,7 @@ async function updateLeadTelegramFlags(id, { telegramSent, telegramHotSent }) {
 
     if (telegramSent != null) lead.telegram_sent = telegramSent ? 1 : 0;
     if (telegramHotSent != null) lead.telegram_hot_sent = telegramHotSent ? 1 : 0;
+    if (telegramPhoneSent != null) lead.telegram_phone_sent = telegramPhoneSent ? 1 : 0;
     lead.updated_at = new Date().toISOString();
     await persistStore(store);
     return { changes: 1, lead: cloneLead(lead) };

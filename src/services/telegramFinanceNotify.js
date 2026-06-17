@@ -14,6 +14,12 @@ function safeText(value, fallback = '-') {
   return text.slice(0, 1000);
 }
 
+function formatMessageBody(value) {
+  return safeText(value)
+    .replace(/\r\n/g, '\n')
+    .trim();
+}
+
 function normalizeRecipients(input) {
   if (Array.isArray(input)) {
     return input.map(item => String(item).trim()).filter(Boolean);
@@ -30,6 +36,7 @@ function formatFinanceLeadTelegram(lead, type = 'normal') {
     ? '[LEAD NÓNG - CẦN GỌI NHANH]'
     : '[LEAD TÀI CHÍNH MỚI]';
 
+  const messageBody = formatMessageBody(lead.message);
   const lines = [
     title,
     `Mã: ${safeText(lead.lead_code)}`,
@@ -47,7 +54,7 @@ function formatFinanceLeadTelegram(lead, type = 'normal') {
   ];
 
   if (type === 'hot') lines.push(`Lý do nóng: ${safeText(lead.hot_reasons)}`);
-  lines.push(`Nội dung: ${safeText(lead.message)}`);
+  lines.push(messageBody ? `Nội dung:\n${messageBody}` : 'Nội dung: -');
   lines.push(`Thời gian: ${safeText(lead.created_at || new Date().toISOString())}`);
 
   return lines.join('\n');
