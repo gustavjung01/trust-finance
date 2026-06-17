@@ -62,6 +62,29 @@ function hasLeadContact(lead = {}) {
   return Boolean(String(lead.normalized_phone || lead.phone || '').trim());
 }
 
+function getPhoneFromMessage(message = '') {
+  const text = String(message || '').replace(/[^0-9+]/g, '');
+  const localMatch = text.match(/0[35789][0-9]{8}/);
+  if (localMatch) return localMatch[0];
+  const intlMatch = text.match(/(?:\+?84)([35789][0-9]{8})/);
+  return intlMatch ? `0${intlMatch[1]}` : '';
+}
+
+function shouldCaptureChatMessage(message = '') {
+  const text = String(message || '').toLowerCase();
+  const noMark = text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D');
+  const hotKeywords = [
+    'vay', 'mo the', 'mở thẻ', 'the', 'thẻ', 'cic', 'no xau', 'nợ xấu',
+    'lai suat', 'lãi suất', 'han muc', 'hạn mức', 'giai ngan', 'giải ngân',
+    'goi lai', 'gọi lại', 'can tien', 'cần tiền', 'gap', 'gấp'
+  ];
+  return Boolean(getPhoneFromMessage(message)) || hotKeywords.some(keyword => text.includes(keyword) || noMark.includes(keyword));
+}
+
 async function telegramSendMessage({ chatId, text, token }) {
   if (!token) return { success: false, reason: 'no_token' };
   try {
@@ -77,102 +100,120 @@ async function telegramSendMessage({ chatId, text, token }) {
   }
 }
 
-router.post('/finance-leads', async (req, res) => {
-  try {
-    const payload = cleanPayload(req.body);
-    const scored = scoreFinanceLead(payload);
-    const isChatLead = payload.source === 'chatbot' && !!payload.chat_session_id;
+async function notifyLeadIfNeeded({ lead, previousLead, scored, settings }) {
+  const botToken = settings.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+  const chatIds = normalizeTelegramChatIds(settings.TELEGRAM_DEFAULT_CHAT_ID || process.env.TELEGRAM_DEFAULT_CHAT_ID);
 
-    if (!scored.normalizedPhone && !isChatLead) {
-      return res.status(400).json({ success: false, error: 'phone_required' });
-    }
+  if (!botToken || chatIds.length === 0) {
+    return { sent: false, reason: 'missing_telegram_config' };
+  }
 
-    const lead_code = makeLeadCode(Date.now() % 1000000);
-    let lead = null;
-    let previousLead = null;
+  const hasNormalSetting = settingExists(settings, 'notify_finance_chat_lead');
+  const hasHotSetting = settingExists(settings, 'notify_finance_hot_lead');
+  const defaultNotify = !hasNormalSetting && !hasHotSetting;
+  const notifyNormalEnabled = settingEnabled(settings.notify_finance_chat_lead, defaultNotify);
+  const notifyHotEnabled = settingEnabled(settings.notify_finance_hot_lead, defaultNotify || notifyNormalEnabled);
+  const contactJustAdded = previousLead && !hasLeadContact(previousLead) && hasLeadContact(lead);
 
-    if (isChatLead) {
-      const existingLead = await leadStore.findLeadByChatSessionId(payload.chat_session_id);
-      if (existingLead) {
-        previousLead = existingLead;
-        const updatedLead = await leadStore.updateLead(existingLead.id, {
-          ...payload,
-          full_name: payload.full_name || existingLead.full_name,
-          phone: payload.phone || existingLead.phone,
-          normalized_phone: scored.normalizedPhone || existingLead.normalized_phone || '',
-          product_type: payload.product_type || existingLead.product_type,
-          province: payload.province || existingLead.province,
-          loan_amount: payload.loan_amount || existingLead.loan_amount,
-          message: payload.message || existingLead.message,
-          source: payload.source || existingLead.source,
-          utm_source: payload.utm_source || existingLead.utm_source,
-          utm_medium: payload.utm_medium || existingLead.utm_medium,
-          utm_campaign: payload.utm_campaign || existingLead.utm_campaign,
-          cta_position: payload.cta_position || existingLead.cta_position,
-          page_url: payload.page_url || existingLead.page_url,
-          chat_session_id: payload.chat_session_id || existingLead.chat_session_id,
-          is_hot: scored.isHot || existingLead.is_hot,
-          hot_reasons: scored.hotReasons.length ? scored.hotReasons.join(', ') : existingLead.hot_reasons
-        });
-        lead = updatedLead.lead;
-      } else {
-        lead = await leadStore.createLead({
-          lead_code,
-          ...payload,
-          normalized_phone: scored.normalizedPhone || '',
-          is_hot: scored.isHot,
-          hot_reasons: scored.hotReasons.join(', '),
-          status: 'new'
-        });
-      }
+  const shouldNotifyNormal = notifyNormalEnabled && !lead.is_hot && !lead.telegram_sent;
+  const shouldNotifyHot = notifyHotEnabled && !!lead.is_hot && !lead.telegram_hot_sent;
+  const shouldNotifyContactUpdate = notifyNormalEnabled && contactJustAdded && !lead.telegram_sent;
+
+  if (!shouldNotifyNormal && !shouldNotifyHot && !shouldNotifyContactUpdate) {
+    return { sent: false, reason: 'already_notified_or_disabled' };
+  }
+
+  const notifyResult = await notifyFinanceLead({
+    lead: shouldNotifyContactUpdate
+      ? { ...lead, message: `${lead.message || ''}\nKhách vừa bổ sung SĐT trong chat.`.trim() }
+      : lead,
+    settings: {
+      notify_finance_chat_lead: shouldNotifyNormal || shouldNotifyContactUpdate,
+      notify_finance_hot_lead: shouldNotifyHot,
+      telegram_default_channel: chatIds
+    },
+    telegramSendMessage: ({ chatId, text }) => telegramSendMessage({ chatId, text, token: botToken })
+  });
+
+  if (notifyResult && notifyResult.sent) {
+    await leadStore.updateLeadTelegramFlags(lead.id, {
+      telegramSent: shouldNotifyNormal || shouldNotifyContactUpdate,
+      telegramHotSent: shouldNotifyHot
+    });
+  }
+
+  return notifyResult || { sent: false, reason: 'notify_failed' };
+}
+
+async function saveFinanceLead(payload, scored) {
+  const isChatLead = payload.source === 'chatbot' && !!payload.chat_session_id;
+
+  if (!scored.normalizedPhone && !isChatLead) {
+    const err = new Error('phone_required');
+    err.code = 'phone_required';
+    err.status = 400;
+    throw err;
+  }
+
+  const lead_code = makeLeadCode(Date.now() % 1000000);
+  let lead = null;
+  let previousLead = null;
+
+  if (isChatLead) {
+    const existingLead = await leadStore.findLeadByChatSessionId(payload.chat_session_id);
+    if (existingLead) {
+      previousLead = existingLead;
+      const updatedLead = await leadStore.updateLead(existingLead.id, {
+        ...payload,
+        full_name: payload.full_name || existingLead.full_name,
+        phone: payload.phone || existingLead.phone,
+        normalized_phone: scored.normalizedPhone || existingLead.normalized_phone || '',
+        product_type: payload.product_type || existingLead.product_type,
+        province: payload.province || existingLead.province,
+        loan_amount: payload.loan_amount || existingLead.loan_amount,
+        message: payload.message || existingLead.message,
+        source: payload.source || existingLead.source,
+        utm_source: payload.utm_source || existingLead.utm_source,
+        utm_medium: payload.utm_medium || existingLead.utm_medium,
+        utm_campaign: payload.utm_campaign || existingLead.utm_campaign,
+        cta_position: payload.cta_position || existingLead.cta_position,
+        page_url: payload.page_url || existingLead.page_url,
+        chat_session_id: payload.chat_session_id || existingLead.chat_session_id,
+        is_hot: scored.isHot || existingLead.is_hot,
+        hot_reasons: scored.hotReasons.length ? scored.hotReasons.join(', ') : existingLead.hot_reasons
+      });
+      lead = updatedLead.lead;
     } else {
       lead = await leadStore.createLead({
         lead_code,
         ...payload,
-        normalized_phone: scored.normalizedPhone,
+        normalized_phone: scored.normalizedPhone || '',
         is_hot: scored.isHot,
         hot_reasons: scored.hotReasons.join(', '),
         status: 'new'
       });
     }
+  } else {
+    lead = await leadStore.createLead({
+      lead_code,
+      ...payload,
+      normalized_phone: scored.normalizedPhone,
+      is_hot: scored.isHot,
+      hot_reasons: scored.hotReasons.join(', '),
+      status: 'new'
+    });
+  }
 
+  return { lead, previousLead };
+}
+
+router.post('/finance-leads', async (req, res) => {
+  try {
+    const payload = cleanPayload(req.body);
+    const scored = scoreFinanceLead(payload);
+    const { lead, previousLead } = await saveFinanceLead(payload, scored);
     const settings = await leadStore.getSettings();
-    const botToken = settings.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
-    const chatIds = normalizeTelegramChatIds(settings.TELEGRAM_DEFAULT_CHAT_ID || process.env.TELEGRAM_DEFAULT_CHAT_ID);
-
-    if (botToken && chatIds.length > 0) {
-      const hasNormalSetting = settingExists(settings, 'notify_finance_chat_lead');
-      const hasHotSetting = settingExists(settings, 'notify_finance_hot_lead');
-      const defaultNotify = !hasNormalSetting && !hasHotSetting;
-      const notifyNormalEnabled = settingEnabled(settings.notify_finance_chat_lead, defaultNotify);
-      const notifyHotEnabled = settingEnabled(settings.notify_finance_hot_lead, defaultNotify || notifyNormalEnabled);
-      const contactJustAdded = previousLead && !hasLeadContact(previousLead) && hasLeadContact(lead);
-
-      const shouldNotifyNormal = notifyNormalEnabled && !lead.is_hot && !lead.telegram_sent;
-      const shouldNotifyHot = notifyHotEnabled && !!lead.is_hot && !lead.telegram_hot_sent;
-      const shouldNotifyContactUpdate = notifyNormalEnabled && contactJustAdded && !lead.telegram_sent;
-
-      if (shouldNotifyNormal || shouldNotifyHot || shouldNotifyContactUpdate) {
-        const notifyResult = await notifyFinanceLead({
-          lead: shouldNotifyContactUpdate
-            ? { ...lead, message: `${lead.message || ''}\nKhách vừa bổ sung SĐT trong chat.`.trim() }
-            : lead,
-          settings: {
-            notify_finance_chat_lead: shouldNotifyNormal || shouldNotifyContactUpdate,
-            notify_finance_hot_lead: shouldNotifyHot,
-            telegram_default_channel: chatIds
-          },
-          telegramSendMessage: ({ chatId, text }) => telegramSendMessage({ chatId, text, token: botToken })
-        });
-
-        if (notifyResult && notifyResult.sent) {
-          await leadStore.updateLeadTelegramFlags(lead.id, {
-            telegramSent: shouldNotifyNormal || shouldNotifyContactUpdate,
-            telegramHotSent: shouldNotifyHot
-          });
-        }
-      }
-    }
+    await notifyLeadIfNeeded({ lead, previousLead, scored, settings });
 
     return res.json({
       success: true,
@@ -185,7 +226,7 @@ router.post('/finance-leads', async (req, res) => {
     });
   } catch (err) {
     console.error('[finance-leads] create failed:', err.message);
-    return res.status(500).json({
+    return res.status(err.status || 500).json({
       success: false,
       error: err.code || 'create_finance_lead_failed',
       message: err.message
@@ -200,6 +241,24 @@ router.post('/chatbot/message', async (req, res) => {
     const sessionId = makeSessionId(req.body?.session_id || req.body?.chat_session_id || req.body?.conversation_id);
     const credentialsJson = getDialogflowCredentialsJson(settings);
     const enabled = settings.enable_chatbot === 'true' || settings.enable_chatbot === true || process.env.ENABLE_CHATBOT === 'true';
+
+    if (shouldCaptureChatMessage(message)) {
+      try {
+        const payload = cleanPayload({
+          phone: getPhoneFromMessage(message),
+          message,
+          source: 'chatbot',
+          chat_session_id: sessionId,
+          page_url: req.body?.page_url || '',
+          product_type: req.body?.product_type || 'consulting'
+        });
+        const scored = scoreFinanceLead(payload);
+        const { lead, previousLead } = await saveFinanceLead(payload, scored);
+        await notifyLeadIfNeeded({ lead, previousLead, scored, settings });
+      } catch (captureErr) {
+        console.error('[chatbot/message] lead capture failed:', captureErr.message);
+      }
+    }
 
     const result = await detectFinanceChat({
       message,
