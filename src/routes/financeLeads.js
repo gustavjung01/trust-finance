@@ -195,6 +195,104 @@ function buildTelegramMessage(lead, type = 'normal', extraLines = []) {
   return notes.length ? `${base}\n${notes.join('\n')}` : base;
 }
 
+function formatMinuteKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+  return `${year}${month}${day}${hour}${minute}`;
+}
+
+function makeTelegramPhoneEventKey(sessionId, phone) {
+  const safeSessionId = String(sessionId || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
+  const safePhone = String(phone || '').trim().replace(/[^0-9+]/g, '');
+  return `phone:${safeSessionId}:${safePhone}:${formatMinuteKey(new Date())}`;
+}
+
+function getTelegramEventSettingKey(eventKey) {
+  return `telegram_event_${String(eventKey || '').trim()}`;
+}
+
+async function wasTelegramEventSent(eventKey) {
+  if (!eventKey) return false;
+  try {
+    const value = await leadStore.getSetting(getTelegramEventSettingKey(eventKey));
+    return Boolean(value);
+  } catch (err) {
+    console.error('[chatbot telegram] check event failed:', err.message);
+    return false;
+  }
+}
+
+async function markTelegramEventSent(eventKey) {
+  if (!eventKey) return false;
+  try {
+    await leadStore.setSettings({
+      [getTelegramEventSettingKey(eventKey)]: new Date().toISOString()
+    });
+    return true;
+  } catch (err) {
+    console.error('[chatbot telegram] mark event failed:', err.message);
+    return false;
+  }
+}
+
+function buildPhoneCaptureTelegramText({ lead, sessionId, phone, message }) {
+  const lines = [
+    '[LEAD CHAT CÓ SĐT]',
+    `SĐT: ${String(phone || lead?.phone || lead?.normalized_phone || '').trim()}`,
+    `Session: ${String(sessionId || lead?.chat_session_id || '').trim()}`
+  ];
+
+  if (lead && lead.lead_code) {
+    lines.push(`Mã: ${String(lead.lead_code).trim()}`);
+  }
+
+  lines.push(`Nội dung: ${String(message || lead?.message || '').trim() || '-'}`);
+  lines.push(`Thời gian: ${new Date().toISOString()}`);
+  return lines.join('\n');
+}
+
+async function sendTelegramPhoneCapture({ settings, chatIds, token, lead, sessionId, phone, message }) {
+  const telegram = resolveTelegramConfig(settings);
+  const botToken = String(token || telegram.token || '').trim();
+  const recipients = Array.isArray(chatIds) && chatIds.length > 0 ? chatIds : telegram.chatIds;
+
+  if (!botToken || recipients.length === 0) {
+    return {
+      attempted: false,
+      sent: false,
+      reason: 'missing_telegram_config',
+      error: null,
+      results: []
+    };
+  }
+
+  const text = buildPhoneCaptureTelegramText({ lead, sessionId, phone, message });
+  const results = [];
+
+  for (const chatId of recipients) {
+    const result = await telegramSendMessage({
+      chatId,
+      text,
+      token: botToken
+    });
+    results.push({ chatId, ...result });
+  }
+
+  const sent = results.some(item => item.success);
+  const hasChatNotFound = results.some(item => String(item?.error || item?.reason || item?.response?.description || '').toLowerCase().includes('chat not found'));
+
+  return {
+    attempted: true,
+    sent,
+    reason: sent ? 'phone_capture_sent' : (hasChatNotFound ? 'telegram_chat_not_found' : 'telegram_send_failed'),
+    error: sent ? null : (results.find(item => !item.success)?.error || results.find(item => !item.success)?.reason || 'telegram_send_failed'),
+    results
+  };
+}
+
 async function telegramSendMessage({ chatId, text, token }) {
   if (!token) {
     return { success: false, reason: 'missing_telegram_config' };
@@ -423,7 +521,9 @@ async function upsertChatLead(payload, scored, settings, options = {}) {
     }
   };
 
-  if (scored.shouldCapture || contactJustAdded) {
+  const skipTelegramNotification = Boolean(options.skipTelegramNotification);
+
+  if (!skipTelegramNotification && (scored.shouldCapture || contactJustAdded)) {
     const notification = await notifyLeadIfNeeded({
       lead,
       previousLead: existingLead,
@@ -457,6 +557,13 @@ async function upsertChatLead(payload, scored, settings, options = {}) {
         console.error('[chatbot capture] update telegram flags failed:', flagErr.message);
       }
     }
+  } else if (skipTelegramNotification && (scored.shouldCapture || contactJustAdded)) {
+    capture.telegram = {
+      attempted: false,
+      sent: false,
+      reason: 'skipped_for_phone_capture',
+      results: []
+    };
   }
 
   return {
@@ -467,6 +574,120 @@ async function upsertChatLead(payload, scored, settings, options = {}) {
     phoneChanged: currentPhoneChanged,
     currentMessageHasPhone,
     messagePhoneDetected
+  };
+}
+
+async function processChatbotCapture({ settings, message, sessionId, payload, scored }) {
+  const phoneDetected = getPhoneFromMessage(message) || String(payload?.phone || '').trim();
+  let captureDebug = {
+    captured: false,
+    phoneDetected,
+    eventKey: phoneDetected ? makeTelegramPhoneEventKey(sessionId, phoneDetected) : '',
+    leadId: null,
+    leadCode: null,
+    isHot: scored.isHot,
+    hotReasons: scored.hotReasons,
+    telegram: {
+      attempted: false,
+      sent: false,
+      reason: 'not_attempted',
+      error: null,
+      results: []
+    },
+    error: null,
+    message: null
+  };
+
+  let leadRecord = null;
+
+  try {
+    const existingLead = await leadStore.findLeadByChatSessionId(sessionId);
+    if (scored.shouldCapture || existingLead) {
+      const upsert = await upsertChatLead(payload, scored, settings, {
+        skipTelegramNotification: Boolean(phoneDetected)
+      });
+
+      leadRecord = upsert.lead || null;
+      captureDebug = {
+        ...captureDebug,
+        captured: upsert.capture.captured,
+        phoneDetected: phoneDetected || upsert.capture.phoneDetected || '',
+        leadId: upsert.capture.leadId,
+        leadCode: upsert.capture.leadCode,
+        isHot: upsert.capture.isHot,
+        hotReasons: upsert.capture.hotReasons,
+        telegram: phoneDetected
+          ? captureDebug.telegram
+          : {
+              attempted: Boolean(upsert.capture.telegram?.attempted),
+              sent: Boolean(upsert.capture.telegram?.sent),
+              reason: upsert.capture.telegram?.reason || null,
+              error: null,
+              results: Array.isArray(upsert.capture.telegram?.results) ? upsert.capture.telegram.results : []
+            }
+      };
+    }
+  } catch (err) {
+    console.error('[chatbot/message] capture failed:', err.message);
+    captureDebug = {
+      ...captureDebug,
+      captured: false,
+      leadId: null,
+      leadCode: null,
+      telegram: {
+        attempted: false,
+        sent: false,
+        reason: err.code || 'capture_failed',
+        error: err.message,
+        results: []
+      },
+      error: err.code || 'capture_failed',
+      message: err.message
+    };
+  }
+
+  if (phoneDetected) {
+    try {
+      if (await wasTelegramEventSent(captureDebug.eventKey)) {
+        captureDebug.telegram = {
+          attempted: false,
+          sent: false,
+          reason: 'duplicate_phone_event',
+          error: null,
+          results: []
+        };
+      } else {
+        const telegram = resolveTelegramConfig(settings);
+        const phoneTelegram = await sendTelegramPhoneCapture({
+          settings,
+          chatIds: telegram.chatIds,
+          token: telegram.token,
+          lead: leadRecord,
+          sessionId,
+          phone: phoneDetected,
+          message
+        });
+
+        captureDebug.telegram = phoneTelegram;
+        if (phoneTelegram.sent) {
+          await markTelegramEventSent(captureDebug.eventKey);
+        }
+      }
+    } catch (err) {
+      console.error('[chatbot/message] phone telegram failed:', err.message);
+      captureDebug.telegram = {
+        attempted: true,
+        sent: false,
+        reason: err.code || 'telegram_failed',
+        error: err.message,
+        results: []
+      };
+    }
+  }
+
+  return {
+    ...captureDebug,
+    telegram: captureDebug.telegram
   };
 }
 
@@ -580,7 +801,7 @@ router.post('/chatbot/message', async (req, res) => {
   const scored = scoreChatCapture(message);
   const payload = cleanPayload({
     full_name: req.body?.full_name || '',
-    phone: getPhoneFromMessage(message),
+    phone: getPhoneFromMessage(message) || String(req.body?.phone || '').trim(),
     id_number: req.body?.id_number || '',
     date_of_birth: req.body?.date_of_birth || '',
     product_type: req.body?.product_type || 'consulting',
@@ -592,82 +813,23 @@ router.post('/chatbot/message', async (req, res) => {
     page_url: req.body?.page_url || '',
     cta_position: req.body?.cta_position || ''
   });
-  const messageHasPhone = Boolean(getPhoneFromMessage(message) || req.body?.phone);
 
   let settings = {};
   try {
     settings = await leadStore.getSettings();
   } catch (err) {
     console.error('[chatbot/message] get settings failed:', err.message);
-    settings = {};
   }
 
   const credentialsJson = getDialogflowCredentialsJson(settings);
   const enabled = parseSoftBoolean(settings.enable_chatbot, false) || process.env.ENABLE_CHATBOT === 'true';
-
-  let captureDebug = {
-    captured: false,
-    phoneDetected: scored.phone || '',
-    leadId: null,
-    leadCode: null,
-    isHot: scored.isHot,
-    hotReasons: scored.hotReasons,
-    telegram: {
-      attempted: false,
-      sent: false,
-      reason: 'not_attempted',
-      results: []
-    },
-    error: null,
-    message: null
-  };
-
-  try {
-    const existingLead = await leadStore.findLeadByChatSessionId(sessionId);
-    if (scored.shouldCapture || existingLead) {
-      const upsert = await upsertChatLead(payload, scored, settings, {
-        messageHasPhone
-      });
-      captureDebug = {
-        captured: upsert.capture.captured,
-        phoneDetected: upsert.capture.leadPhone || upsert.capture.phone || scored.phone || '',
-        leadId: upsert.capture.leadId,
-        leadCode: upsert.capture.leadCode,
-        isHot: upsert.capture.isHot,
-        hotReasons: upsert.capture.hotReasons,
-        telegram: {
-          attempted: Boolean(upsert.capture.telegram?.attempted),
-          sent: Boolean(upsert.capture.telegram?.sent),
-          reason: upsert.capture.telegram?.reason || null,
-          results: Array.isArray(upsert.capture.telegram?.results) ? upsert.capture.telegram.results : []
-        },
-        phoneJustAdded: Boolean(upsert.phoneJustAdded),
-        phoneChanged: Boolean(upsert.phoneChanged),
-        currentMessageHasPhone: Boolean(upsert.currentMessageHasPhone),
-        telegramPhoneSent: upsert.capture.telegramPhoneSent ? 1 : 0,
-        error: null,
-        message: null
-      };
-    }
-  } catch (err) {
-    console.error('[chatbot/message] capture failed:', err.message);
-    captureDebug = {
-      captured: false,
-      phoneDetected: scored.phone || '',
-      leadId: null,
-      leadCode: null,
-      isHot: scored.isHot,
-      hotReasons: scored.hotReasons,
-      telegram: {
-        attempted: false,
-        sent: false,
-        reason: err.code || 'capture_failed',
-        results: []
-      },
-      error: err.code || 'capture_failed',
-      message: err.message
-    };
-  }
+  const captureDebug = await processChatbotCapture({
+    settings,
+    message,
+    sessionId,
+    payload,
+    scored
+  });
 
   let chatResult;
   try {
@@ -680,13 +842,7 @@ router.post('/chatbot/message', async (req, res) => {
     });
   } catch (err) {
     console.error('[chatbot/message] dialogflow failed:', err.message);
-    chatResult = {
-      source: 'fallback',
-      reply: fallbackReply,
-      replies: [fallbackReply],
-      sessionId,
-      reason: err.message
-    };
+    chatResult = null;
   }
 
   const dialogflowOk = Boolean(chatResult?.success && chatResult.source === 'dialogflow');
@@ -700,8 +856,8 @@ router.post('/chatbot/message', async (req, res) => {
     source: dialogflowOk ? 'dialogflow' : 'fallback',
     reply: finalReply,
     replies: finalReplies,
-    session_id: chatResult.sessionId || sessionId,
-    fallback_reason: dialogflowOk ? null : (chatResult.reason || 'dialogflow_failed'),
+    session_id: (dialogflowOk && chatResult?.sessionId) ? chatResult.sessionId : sessionId,
+    fallback_reason: dialogflowOk ? null : (chatResult?.reason || 'dialogflow_failed'),
     capture: captureDebug
   });
 });
@@ -738,7 +894,7 @@ router.post('/admin/finance-leads/test-chat-lead', adminAuth, async (req, res) =
     const scored = scoreChatCapture(message);
     const payload = cleanPayload({
       full_name: req.body?.full_name || 'Admin Test',
-      phone: scored.phone,
+      phone: getPhoneFromMessage(message) || String(req.body?.phone || '').trim(),
       id_number: req.body?.id_number || '',
       date_of_birth: req.body?.date_of_birth || '',
       product_type: req.body?.product_type || 'consulting',
@@ -750,31 +906,28 @@ router.post('/admin/finance-leads/test-chat-lead', adminAuth, async (req, res) =
       page_url: req.body?.page_url || '',
       cta_position: req.body?.cta_position || ''
     });
-    const messageHasPhone = Boolean(getPhoneFromMessage(message) || req.body?.phone);
-
-    const upsert = await upsertChatLead(payload, scored, settings, {
-      messageHasPhone
+    const capture = await processChatbotCapture({
+      settings,
+      message,
+      sessionId,
+      payload,
+      scored
     });
 
     return res.json({
       success: true,
       test: {
-        shouldCapture: upsert.capture.captured,
-        phoneDetected: upsert.capture.phoneDetected,
-        leadId: upsert.capture.leadId,
-        leadCode: upsert.capture.leadCode,
-        leadPhone: upsert.capture.leadPhone,
-        isHot: upsert.capture.isHot,
-        hotReasons: upsert.capture.hotReasons,
-        wasExistingLead: upsert.capture.wasExistingLead,
-        contactJustAdded: upsert.capture.contactJustAdded,
-        telegramPhoneSent: upsert.capture.telegramPhoneSent,
-        phoneJustAdded: upsert.phoneJustAdded,
-        phoneChanged: upsert.phoneChanged,
-        currentMessageHasPhone: upsert.currentMessageHasPhone
+        shouldCapture: capture.captured,
+        phoneDetected: capture.phoneDetected,
+        eventKey: capture.eventKey,
+        leadId: capture.leadId,
+        leadCode: capture.leadCode,
+        isHot: capture.isHot,
+        hotReasons: capture.hotReasons
       },
-      telegramConfig: upsert.capture.telegramConfig,
-      telegram: upsert.capture.telegram
+      telegramConfig: makeTelegramConfigDebug(settings),
+      telegram: capture.telegram,
+      eventKey: capture.eventKey
     });
   } catch (err) {
     res.status(500).json({
