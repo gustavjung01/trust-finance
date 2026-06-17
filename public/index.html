@@ -680,10 +680,6 @@ loadProvinces(); // Thay link Zalo thật vào đây
 
             const typingRow = appendBubble({ role: 'bot', loading: true });
 
-            if (shouldCaptureChatLead(msg)) {
-                queueLeadCapture(msg, sessionId);
-            }
-
             try {
                 const res = await fetch('/api/chatbot/message', {
                     method: 'POST',
