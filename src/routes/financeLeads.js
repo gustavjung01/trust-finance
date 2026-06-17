@@ -47,6 +47,21 @@ function normalizeTelegramChatIds(input) {
     .filter(Boolean);
 }
 
+function settingExists(settings = {}, key) {
+  return Object.prototype.hasOwnProperty.call(settings, key) && String(settings[key] || '').trim() !== '';
+}
+
+function settingEnabled(value, fallback = false) {
+  if (value == null || value === '') return fallback;
+  if (value === true || value === 1) return true;
+  const text = String(value).trim().toLowerCase();
+  return ['true', '1', 'yes', 'y', 'on', 'enabled'].includes(text);
+}
+
+function hasLeadContact(lead = {}) {
+  return Boolean(String(lead.normalized_phone || lead.phone || '').trim());
+}
+
 async function telegramSendMessage({ chatId, text, token }) {
   if (!token) return { success: false, reason: 'no_token' };
   try {
@@ -74,10 +89,12 @@ router.post('/finance-leads', async (req, res) => {
 
     const lead_code = makeLeadCode(Date.now() % 1000000);
     let lead = null;
+    let previousLead = null;
 
     if (isChatLead) {
       const existingLead = await leadStore.findLeadByChatSessionId(payload.chat_session_id);
       if (existingLead) {
+        previousLead = existingLead;
         const updatedLead = await leadStore.updateLead(existingLead.id, {
           ...payload,
           full_name: payload.full_name || existingLead.full_name,
@@ -94,8 +111,8 @@ router.post('/finance-leads', async (req, res) => {
           cta_position: payload.cta_position || existingLead.cta_position,
           page_url: payload.page_url || existingLead.page_url,
           chat_session_id: payload.chat_session_id || existingLead.chat_session_id,
-          is_hot: scored.isHot,
-          hot_reasons: scored.hotReasons.join(', ')
+          is_hot: scored.isHot || existingLead.is_hot,
+          hot_reasons: scored.hotReasons.length ? scored.hotReasons.join(', ') : existingLead.hot_reasons
         });
         lead = updatedLead.lead;
       } else {
@@ -124,14 +141,24 @@ router.post('/finance-leads', async (req, res) => {
     const chatIds = normalizeTelegramChatIds(settings.TELEGRAM_DEFAULT_CHAT_ID || process.env.TELEGRAM_DEFAULT_CHAT_ID);
 
     if (botToken && chatIds.length > 0) {
-      const shouldNotifyNormal = settings.notify_finance_chat_lead === 'true' && !lead.is_hot && !lead.telegram_sent;
-      const shouldNotifyHot = settings.notify_finance_hot_lead === 'true' && !!lead.is_hot && !lead.telegram_hot_sent;
+      const hasNormalSetting = settingExists(settings, 'notify_finance_chat_lead');
+      const hasHotSetting = settingExists(settings, 'notify_finance_hot_lead');
+      const defaultNotify = !hasNormalSetting && !hasHotSetting;
+      const notifyNormalEnabled = settingEnabled(settings.notify_finance_chat_lead, defaultNotify);
+      const notifyHotEnabled = settingEnabled(settings.notify_finance_hot_lead, defaultNotify || notifyNormalEnabled);
+      const contactJustAdded = previousLead && !hasLeadContact(previousLead) && hasLeadContact(lead);
 
-      if (shouldNotifyNormal || shouldNotifyHot) {
+      const shouldNotifyNormal = notifyNormalEnabled && !lead.is_hot && !lead.telegram_sent;
+      const shouldNotifyHot = notifyHotEnabled && !!lead.is_hot && !lead.telegram_hot_sent;
+      const shouldNotifyContactUpdate = notifyNormalEnabled && contactJustAdded && !lead.telegram_sent;
+
+      if (shouldNotifyNormal || shouldNotifyHot || shouldNotifyContactUpdate) {
         const notifyResult = await notifyFinanceLead({
-          lead,
+          lead: shouldNotifyContactUpdate
+            ? { ...lead, message: `${lead.message || ''}\nKhách vừa bổ sung SĐT trong chat.`.trim() }
+            : lead,
           settings: {
-            notify_finance_chat_lead: shouldNotifyNormal,
+            notify_finance_chat_lead: shouldNotifyNormal || shouldNotifyContactUpdate,
             notify_finance_hot_lead: shouldNotifyHot,
             telegram_default_channel: chatIds
           },
@@ -140,7 +167,7 @@ router.post('/finance-leads', async (req, res) => {
 
         if (notifyResult && notifyResult.sent) {
           await leadStore.updateLeadTelegramFlags(lead.id, {
-            telegramSent: shouldNotifyNormal,
+            telegramSent: shouldNotifyNormal || shouldNotifyContactUpdate,
             telegramHotSent: shouldNotifyHot
           });
         }
