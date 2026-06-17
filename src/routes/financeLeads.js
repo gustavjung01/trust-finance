@@ -399,7 +399,7 @@ async function upsertChatLead(payload, scored, settings, options = {}) {
 
   const capture = {
     captured: Boolean(scored.shouldCapture || existingLead),
-    phoneDetected: scored.phoneDetected,
+    phoneDetected: scored.phone || '',
     leadId: lead.id,
     leadCode: lead.lead_code,
     leadPhone: lead.normalized_phone || lead.phone || '',
@@ -413,9 +413,10 @@ async function upsertChatLead(payload, scored, settings, options = {}) {
     phoneJustAdded,
     phoneChanged: currentPhoneChanged,
     currentMessageHasPhone,
-    telegramPhoneSent: toIntFlag(lead.telegram_phone_sent),
+    telegramPhoneSent: lead.telegram_phone_sent ? 1 : 0,
     telegramConfig: makeTelegramConfigDebug(settings),
     telegram: {
+      attempted: false,
       sent: false,
       reason: 'not_captured',
       results: []
@@ -435,6 +436,7 @@ async function upsertChatLead(payload, scored, settings, options = {}) {
     });
 
     capture.telegram = {
+      attempted: true,
       sent: notification.sent,
       reason: notification.reason,
       results: notification.results,
@@ -445,11 +447,15 @@ async function upsertChatLead(payload, scored, settings, options = {}) {
     };
 
     if (notification.sent) {
-      await leadStore.updateLeadTelegramFlags(lead.id, {
-        telegramSent: !lead.is_hot,
-        telegramHotSent: lead.is_hot,
-        telegramPhoneSent: notification.phoneNotify
-      });
+      try {
+        await leadStore.updateLeadTelegramFlags(lead.id, {
+          telegramSent: !lead.is_hot,
+          telegramHotSent: lead.is_hot,
+          telegramPhoneSent: notification.phoneNotify
+        });
+      } catch (flagErr) {
+        console.error('[chatbot capture] update telegram flags failed:', flagErr.message);
+      }
     }
   }
 
@@ -568,89 +574,136 @@ router.post('/finance-leads', async (req, res) => {
 });
 
 router.post('/chatbot/message', async (req, res) => {
+  const message = String(req.body?.message || '').trim();
+  const sessionId = makeSessionId(req.body?.session_id || req.body?.chat_session_id || req.body?.conversation_id);
+  const fallbackReply = buildFallbackReply(message);
+  const scored = scoreChatCapture(message);
+  const payload = cleanPayload({
+    full_name: req.body?.full_name || '',
+    phone: getPhoneFromMessage(message),
+    id_number: req.body?.id_number || '',
+    date_of_birth: req.body?.date_of_birth || '',
+    product_type: req.body?.product_type || 'consulting',
+    province: req.body?.province || '',
+    loan_amount: req.body?.loan_amount || '',
+    message,
+    source: 'chatbot',
+    chat_session_id: sessionId,
+    page_url: req.body?.page_url || '',
+    cta_position: req.body?.cta_position || ''
+  });
+  const messageHasPhone = Boolean(getPhoneFromMessage(message) || req.body?.phone);
+
+  let settings = {};
   try {
-    const settings = await leadStore.getSettings();
-    const message = String(req.body?.message || '').trim();
-    const sessionId = makeSessionId(req.body?.session_id || req.body?.chat_session_id || req.body?.conversation_id);
-    const credentialsJson = getDialogflowCredentialsJson(settings);
-    const enabled = parseSoftBoolean(settings.enable_chatbot, false) || process.env.ENABLE_CHATBOT === 'true';
-    const scored = scoreChatCapture(message);
-    const payload = cleanPayload({
-      full_name: req.body?.full_name || '',
-      phone: getPhoneFromMessage(message),
-      id_number: req.body?.id_number || '',
-      date_of_birth: req.body?.date_of_birth || '',
-      product_type: req.body?.product_type || 'consulting',
-      province: req.body?.province || '',
-      loan_amount: req.body?.loan_amount || '',
-      message,
-      source: 'chatbot',
-      chat_session_id: sessionId,
-      page_url: req.body?.page_url || '',
-      cta_position: req.body?.cta_position || ''
-    });
-    const messageHasPhone = Boolean(getPhoneFromMessage(message) || req.body?.phone);
+    settings = await leadStore.getSettings();
+  } catch (err) {
+    console.error('[chatbot/message] get settings failed:', err.message);
+    settings = {};
+  }
 
-    let capture = {
-      captured: false,
-      leadId: null,
-      leadCode: null,
-      phone: scored.phone,
-      isHot: scored.isHot,
-      hotReasons: scored.hotReasons,
-      telegram: {
-        sent: false,
-        reason: 'not_captured',
-        results: [],
-        phoneNotify: false,
-        phoneJustAdded: false,
-        phoneChanged: false,
-        currentMessageHasPhone: false
-      }
-    };
+  const credentialsJson = getDialogflowCredentialsJson(settings);
+  const enabled = parseSoftBoolean(settings.enable_chatbot, false) || process.env.ENABLE_CHATBOT === 'true';
 
-    if (scored.shouldCapture || await leadStore.findLeadByChatSessionId(sessionId)) {
+  let captureDebug = {
+    captured: false,
+    phoneDetected: scored.phone || '',
+    leadId: null,
+    leadCode: null,
+    isHot: scored.isHot,
+    hotReasons: scored.hotReasons,
+    telegram: {
+      attempted: false,
+      sent: false,
+      reason: 'not_attempted',
+      results: []
+    },
+    error: null,
+    message: null
+  };
+
+  try {
+    const existingLead = await leadStore.findLeadByChatSessionId(sessionId);
+    if (scored.shouldCapture || existingLead) {
       const upsert = await upsertChatLead(payload, scored, settings, {
         messageHasPhone
       });
-      capture = {
+      captureDebug = {
         captured: upsert.capture.captured,
+        phoneDetected: upsert.capture.leadPhone || upsert.capture.phone || scored.phone || '',
         leadId: upsert.capture.leadId,
         leadCode: upsert.capture.leadCode,
-        phone: upsert.capture.leadPhone,
         isHot: upsert.capture.isHot,
         hotReasons: upsert.capture.hotReasons,
-        telegram: upsert.capture.telegram,
-        phoneJustAdded: upsert.phoneJustAdded,
-        phoneChanged: upsert.phoneChanged,
-        currentMessageHasPhone: upsert.currentMessageHasPhone
+        telegram: {
+          attempted: Boolean(upsert.capture.telegram?.attempted),
+          sent: Boolean(upsert.capture.telegram?.sent),
+          reason: upsert.capture.telegram?.reason || null,
+          results: Array.isArray(upsert.capture.telegram?.results) ? upsert.capture.telegram.results : []
+        },
+        phoneJustAdded: Boolean(upsert.phoneJustAdded),
+        phoneChanged: Boolean(upsert.phoneChanged),
+        currentMessageHasPhone: Boolean(upsert.currentMessageHasPhone),
+        telegramPhoneSent: upsert.capture.telegramPhoneSent ? 1 : 0,
+        error: null,
+        message: null
       };
     }
+  } catch (err) {
+    console.error('[chatbot/message] capture failed:', err.message);
+    captureDebug = {
+      captured: false,
+      phoneDetected: scored.phone || '',
+      leadId: null,
+      leadCode: null,
+      isHot: scored.isHot,
+      hotReasons: scored.hotReasons,
+      telegram: {
+        attempted: false,
+        sent: false,
+        reason: err.code || 'capture_failed',
+        results: []
+      },
+      error: err.code || 'capture_failed',
+      message: err.message
+    };
+  }
 
-    const result = await detectFinanceChat({
+  let chatResult;
+  try {
+    chatResult = await detectFinanceChat({
       message,
       sessionId,
       settings,
       credentialsJson,
       fallbackOnly: !enabled
     });
-
-    return res.json({
-      success: true,
-      source: result.source,
-      reply: result.reply,
-      replies: result.replies,
-      session_id: result.sessionId || sessionId,
-      fallback_reason: result.reason || null,
-      capture
-    });
   } catch (err) {
-    return res.status(500).json({
-      success: false,
-      error: 'chatbot_failed',
-      reply: buildFallbackReply(req.body?.message || '')
-    });
+    console.error('[chatbot/message] dialogflow failed:', err.message);
+    chatResult = {
+      source: 'fallback',
+      reply: fallbackReply,
+      replies: [fallbackReply],
+      sessionId,
+      reason: err.message
+    };
   }
+
+  const dialogflowOk = Boolean(chatResult?.success && chatResult.source === 'dialogflow');
+  const finalReply = dialogflowOk ? (chatResult.reply || fallbackReply) : fallbackReply;
+  const finalReplies = dialogflowOk
+    ? (chatResult.replies || [finalReply])
+    : [finalReply];
+
+  return res.json({
+    success: true,
+    source: dialogflowOk ? 'dialogflow' : 'fallback',
+    reply: finalReply,
+    replies: finalReplies,
+    session_id: chatResult.sessionId || sessionId,
+    fallback_reason: dialogflowOk ? null : (chatResult.reason || 'dialogflow_failed'),
+    capture: captureDebug
+  });
 });
 
 router.post('/leads', (req, res) => {
